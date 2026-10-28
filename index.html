@@ -122,16 +122,13 @@
     position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%;
     background: rgba(255, 255, 255, 0.8); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
   }
-  #vuelo {
-    right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(150px + env(safe-area-inset-bottom, 0px));
-    display: grid; gap: 10px;
-  }
-  #vuelo button { width: 72px; height: 56px; font-size: 15px; background: var(--panel); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
   .tactil { display: none; }
   @media (pointer: coarse) {
     .solo-teclado { display: none; }
     .tactil { display: block; }
     button { padding: 10px 12px; }
+    /* en el celular la pantalla queda limpia: solo la escena y la barra de abajo */
+    .arriba-izq, .arriba-der, #mira, #aviso, #portada { display: none !important; }
   }
   @media (max-width: 700px) {
     #plano { width: 96px; height: 96px; }
@@ -173,6 +170,10 @@
     </div>
     <div class="grupo">
       <button id="b-volar" aria-pressed="false">Volar <kbd class="solo-teclado">F</kbd></button>
+      <span id="vuelo" class="grupo" hidden>
+        <button id="b-subir" aria-label="Subir volando">Subir</button>
+        <button id="b-bajar" aria-label="Bajar volando">Bajar</button>
+      </span>
       <button id="b-entrada">Volver a la entrada <kbd class="solo-teclado">R</kbd></button>
     </div>
     <div class="grupo">
@@ -183,10 +184,6 @@
   </div>
 
   <div id="joystick" hidden><div id="perilla"></div></div>
-  <div id="vuelo" class="hud" hidden>
-    <button id="b-subir" aria-label="Subir volando">Subir</button>
-    <button id="b-bajar" aria-label="Bajar volando">Bajar</button>
-  </div>
   <div id="mira" hidden></div>
   <div id="aviso" class="panel" hidden></div>
 
@@ -644,11 +641,12 @@ function muro(ax, az, bx, bz, esp, alto, m, huecos = []) {
   const dx = (bx - ax) / largo, dz = (bz - az) / largo;
   const enX = Math.abs(dx) > 0.5;
   const ext = esp / 2;
-  const tramo = (t0, t1, y0, y1, mat, grosor) => {
+  // corrido: desplazamiento perpendicular al muro (la hoja corrediza va por delante de la fija)
+  const tramo = (t0, t1, y0, y1, mat, grosor, corrido = 0, colisiona = true) => {
     if (t1 - t0 < 0.001 || y1 - y0 < 0.001) return;
-    const cx = ax + dx * (t0 + t1) / 2, cz = az + dz * (t0 + t1) / 2;
+    const cx = ax + dx * (t0 + t1) / 2 + (enX ? 0 : corrido), cz = az + dz * (t0 + t1) / 2 + (enX ? corrido : 0);
     const hx = enX ? (t1 - t0) / 2 : grosor / 2, hz = enX ? grosor / 2 : (t1 - t0) / 2;
-    caja(cx - hx, y0, cz - hz, cx + hx, y1, cz + hz, mat);
+    caja(cx - hx, y0, cz - hz, cx + hx, y1, cz + hz, mat, colisiona);
   };
   let cursor = -ext;
   for (const h of [...huecos].sort((a, b) => a.desde - b.desde)) {
@@ -660,7 +658,18 @@ function muro(ax, az, bx, bz, esp, alto, m, huecos = []) {
     tramo(h.desde, h.desde + 0.05, h.piso, h.techo, marco, prof);
     tramo(h.hasta - 0.05, h.hasta, h.piso, h.techo, marco, prof);
     tramo(h.desde, h.hasta, h.techo - 0.05, h.techo, marco, prof);
-    if (h.vidrio) {
+    if (h.corrediza) {
+      // puerta corrediza abierta: la hoja móvil está corrida por delante de la fija y deja libre la otra mitad
+      const medio = (h.desde + h.hasta) / 2, delante = esp / 2 + 0.03;
+      tramo(h.desde, h.hasta, 0, 0.02, marco, prof, 0, false);
+      tramo(medio - 0.05, medio, h.piso, h.techo, marco, prof);
+      tramo(h.desde, medio, h.piso, h.piso + 0.05, marco, prof);
+      tramo(h.desde, medio, h.piso, h.techo, M.vidrio, 0.02);
+      tramo(h.desde + 0.06, medio + 0.06, 0.02, h.techo - 0.02, M.vidrio, 0.02, delante);
+      for (const t of [h.desde + 0.06, medio + 0.01]) tramo(t, t + 0.05, 0.02, h.techo - 0.02, marco, 0.05, delante);
+      for (const y of [0.02, h.techo - 0.07]) tramo(h.desde + 0.06, medio + 0.06, y, y + 0.05, marco, 0.05, delante);
+      tramo(medio - 0.04, medio - 0.02, 0.9, 1.2, M.cromo, 0.07, delante, false);
+    } else if (h.vidrio) {
       tramo(h.desde, h.hasta, h.piso, h.piso + 0.05, marco, prof);
       if (h.hasta - h.desde > 1.6) {
         const medio = (h.desde + h.hasta) / 2;
@@ -676,6 +685,7 @@ function muro(ax, az, bx, bz, esp, alto, m, huecos = []) {
 const puerta = (desde, hasta) => ({ desde, hasta, piso: 0, techo: 2.1, vidrio: false });
 const ventana = (desde, hasta) => ({ desde, hasta, piso: 0.9, techo: 2.1, vidrio: true });
 const ventanal = (desde, hasta) => ({ desde, hasta, piso: 0, techo: 2.4, vidrio: true });
+const corrediza = (desde, hasta) => ({ desde, hasta, piso: 0, techo: 2.4, vidrio: true, corrediza: true });
 
 function parapeto(x0, y0, z0, x1, y1, z1) {
   caja(x0, y0, z0, x1, y1, z1, M.muro);
@@ -733,7 +743,7 @@ function construirPlantaBaja() {
   muro(0, 0, 0, 15, ESP_EXT, ALTO_MURO, M.muro);
   muro(15, 0, 15, 6, ESP_EXT, ALTO_MURO, M.muro);
   muro(0, 15, 6, 15, ESP_EXT, ALTO_MURO, M.muro);
-  muro(6, 6, 15, 6, ESP_EXT, ALTO_MURO, M.muro, [ventanal(0.5, 3.8), puerta(5, 6)]);
+  muro(6, 6, 15, 6, ESP_EXT, ALTO_MURO, M.muro, [corrediza(0.5, 3.8), puerta(5, 6)]);
   muro(6, 6, 6, 15, ESP_EXT, ALTO_MURO, M.muro, [ventana(1, 2.6), puerta(4, 4.9), ventana(6.2, 8.2)]);
 
   muro(5, 0, 5, 2.7, ESP_INT, ALTO_MURO, M.muro);
@@ -1662,14 +1672,27 @@ function entrar() {
   estado.modo = 'jugando';
   $('portada').hidden = true;
   $('mira').hidden = false;
-  if (ES_TACTIL) avisar('Dedo izquierdo: caminar · Dedo derecho: mirar');
-  else if (lienzo.requestPointerLock) {
+  if (!ES_TACTIL && lienzo.requestPointerLock) {
     try {
       const p = lienzo.requestPointerLock();
       if (p && p.catch) p.catch(() => {});
     } catch (e) { /* sin bloqueo de puntero: se mira arrastrando */ }
   }
 }
+// En el celular, el primer toque pasa a pantalla completa y así desaparece la barra de direcciones.
+// El navegador solo lo permite como respuesta a un toque; si se sale con el gesto de volver, el próximo toque vuelve a entrar.
+function pantallaCompleta() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) return;
+  const pedir = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!pedir) return;
+  try {
+    const p = pedir.call(el, { navigationUI: 'hide' });
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) { /* el navegador no lo permite (por ejemplo Safari en iPhone) */ }
+}
+if (ES_TACTIL) for (const ev of ['touchend', 'click']) document.addEventListener(ev, pantallaCompleta, { capture: true, passive: true });
+
 function pausar() {
   if (estado.modo !== 'jugando') return;
   estado.modo = 'pausa';
@@ -1822,6 +1845,8 @@ async function iniciar() {
   ponerCalidad(calidad);
   lugarOrbita(estado.orbita);
   $('carga').hidden = true;
+  // en el celular no hay tarjeta de inicio: se arranca directo en la vereda
+  if (ES_TACTIL) { volverAlInicio(); entrar(); }
   requestAnimationFrame(cuadro);
 }
 
