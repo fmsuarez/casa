@@ -1,0 +1,1864 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Casa en L</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&display=swap">
+<style>
+  /* Pantalla completa: la escena 3D ocupa todo y el tablero flota encima, como un plano de obra sobre la mesa */
+  :root {
+    --bg: #dfe3de;
+    --panel: rgba(247, 248, 245, 0.88);
+    --panel-borde: rgba(29, 35, 32, 0.14);
+    --fg: #1d2320;
+    --muted: #59635d;
+    --accent: #2f6b58;
+    --accent-fg: #f3f7f4;
+    --plano-casa: #cfc7b8;
+    --plano-patio: #a8c497;
+    --plano-terraza: #c9a77c;
+    --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+    --font-body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1311; --panel: rgba(17, 21, 19, 0.84); --panel-borde: rgba(230, 235, 231, 0.14);
+      --fg: #e6ebe7; --muted: #9aa59e; --accent: #7cc5a8; --accent-fg: #0f1311;
+      --plano-casa: #57534a; --plano-patio: #3f5c36; --plano-terraza: #7a5f3f; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1311; --panel: rgba(17, 21, 19, 0.84); --panel-borde: rgba(230, 235, 231, 0.14);
+    --fg: #e6ebe7; --muted: #9aa59e; --accent: #7cc5a8; --accent-fg: #0f1311;
+    --plano-casa: #57534a; --plano-patio: #3f5c36; --plano-terraza: #7a5f3f; color-scheme: dark;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px;
+    overflow: hidden; -webkit-font-smoothing: antialiased;
+  }
+  #app { position: relative; height: 100%; overflow: hidden; }
+  #lienzo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--panel-borde); border-radius: 10px;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  /* el tablero va por encima de la portada para que los botones respondan también en pausa */
+  .hud { position: absolute; z-index: 4; }
+  .arriba-izq {
+    top: calc(12px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px));
+    padding: 10px 14px; max-width: min(360px, calc(100% - 32px));
+  }
+  .arriba-izq h1 {
+    margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 26px; line-height: 1;
+    letter-spacing: 0.01em; text-wrap: balance;
+  }
+  .ficha { margin: 6px 0 0; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .arriba-der {
+    top: calc(12px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+    padding: 10px; display: grid; gap: 8px; justify-items: stretch;
+  }
+  #plano { width: 150px; height: 150px; display: block; }
+  .ubicacion { font-family: var(--font-display); font-size: 15px; letter-spacing: 0.02em; }
+  .ubicacion small { display: block; font-family: var(--font-body); font-size: 12px; color: var(--muted); letter-spacing: 0; }
+
+  .abajo {
+    left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    padding: 8px; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: center;
+    width: max-content; max-width: calc(100% - 32px);
+  }
+  .grupo { display: flex; align-items: center; gap: 6px; }
+  .etiqueta {
+    font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.08em; font-size: 12px; color: var(--muted);
+  }
+  button {
+    font: 500 14px/1 var(--font-body); color: var(--fg); background: transparent;
+    border: 1px solid var(--panel-borde); border-radius: 7px; padding: 8px 11px; cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+  button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  kbd {
+    font: 600 11px/1 var(--font-body); border: 1px solid var(--panel-borde); border-bottom-width: 2px;
+    border-radius: 4px; padding: 2px 5px; color: var(--fg);
+  }
+
+  #portada {
+    position: absolute; inset: 0; z-index: 3; display: grid; place-items: center;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0) 55%);
+    pointer-events: none;
+  }
+  .tarjeta { padding: 22px 24px; max-width: 420px; display: grid; gap: 14px; pointer-events: auto; }
+  .tarjeta h2 { margin: 0; font-family: var(--font-display); font-size: 30px; font-weight: 600; line-height: 1.05; text-wrap: balance; }
+  .tarjeta p { margin: 0; color: var(--muted); line-height: 1.5; }
+  .teclas { display: grid; grid-template-columns: auto 1fr; gap: 7px 12px; font-size: 14px; align-items: center; }
+  .teclas span:nth-child(odd) { display: flex; gap: 4px; flex-wrap: wrap; }
+  .entrar { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); padding: 12px 16px; font-size: 16px; justify-self: start; }
+  #carga { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; background: var(--bg); }
+  #carga .tarjeta { text-align: left; }
+  .barra-carga { height: 4px; background: var(--panel-borde); border-radius: 2px; overflow: hidden; }
+  .barra-carga div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+  #mira {
+    position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; z-index: 2;
+    border-radius: 50%; background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  }
+  #aviso {
+    position: absolute; left: 50%; top: calc(80px + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+    z-index: 3; padding: 10px 16px; font-weight: 500; transition: opacity 0.3s; max-width: calc(100% - 32px);
+  }
+  button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  /* joystick que aparece donde apoyás el dedo izquierdo */
+  #joystick {
+    position: absolute; z-index: 3; width: 110px; height: 110px; border-radius: 50%; pointer-events: none;
+    background: rgba(255, 255, 255, 0.12); border: 2px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  }
+  #perilla {
+    position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px 0 0 -24px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.8); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  }
+  #vuelo {
+    right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(150px + env(safe-area-inset-bottom, 0px));
+    display: grid; gap: 10px;
+  }
+  #vuelo button { width: 72px; height: 56px; font-size: 15px; background: var(--panel); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .tactil { display: none; }
+  @media (pointer: coarse) {
+    .solo-teclado { display: none; }
+    .tactil { display: block; }
+    button { padding: 10px 12px; }
+  }
+  @media (max-width: 700px) {
+    #plano { width: 96px; height: 96px; }
+    .arriba-izq { padding: 8px 12px; }
+    .arriba-izq h1 { font-size: 20px; }
+    .ficha { display: none; }
+    .arriba-der { padding: 8px; gap: 6px; }
+    .ubicacion { font-size: 14px; }
+    .abajo { gap: 6px 8px; padding: 6px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+    .abajo .etiqueta { display: none; }
+    .abajo button { font-size: 13px; padding: 9px 10px; min-height: 42px; }
+    .tarjeta { padding: 18px; gap: 12px; max-height: calc(100% - 32px); overflow-y: auto; }
+    .tarjeta h2 { font-size: 26px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .barra-carga div { transition: none; } }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <canvas id="lienzo" aria-label="Vista 3D de la casa en L"></canvas>
+
+  <div class="hud panel arriba-izq">
+    <h1>Casa en L</h1>
+    <p class="ficha">Terreno 15 × 15 m · 114 m² cubiertos · 2 dormitorios · terraza de 90 m² con parrilla y fogón</p>
+  </div>
+
+  <div class="hud panel arriba-der">
+    <canvas id="plano" aria-label="Plano con tu ubicación"></canvas>
+    <div class="ubicacion"><span id="ambiente">Vereda</span><small id="nivel">Planta baja</small></div>
+  </div>
+
+  <div class="hud panel abajo" role="toolbar" aria-label="Opciones del recorrido">
+    <div class="grupo">
+      <span class="etiqueta">Hora</span>
+      <button id="h-dia" data-hora="dia" aria-pressed="true">Día <kbd class="solo-teclado">1</kbd></button>
+      <button id="h-atardecer" data-hora="atardecer" aria-pressed="false">Atardecer <kbd class="solo-teclado">2</kbd></button>
+      <button id="h-noche" data-hora="noche" aria-pressed="false">Noche <kbd class="solo-teclado">3</kbd></button>
+    </div>
+    <div class="grupo">
+      <button id="b-volar" aria-pressed="false">Volar <kbd class="solo-teclado">F</kbd></button>
+      <button id="b-entrada">Volver a la entrada <kbd class="solo-teclado">R</kbd></button>
+    </div>
+    <div class="grupo">
+      <span class="etiqueta">Calidad <kbd class="solo-teclado">Q</kbd></span>
+      <button id="c-alta" data-calidad="alta" aria-pressed="true">Alta</button>
+      <button id="c-media" data-calidad="media" aria-pressed="false">Media</button>
+    </div>
+  </div>
+
+  <div id="joystick" hidden><div id="perilla"></div></div>
+  <div id="vuelo" class="hud" hidden>
+    <button id="b-subir" aria-label="Subir volando">Subir</button>
+    <button id="b-bajar" aria-label="Bajar volando">Bajar</button>
+  </div>
+  <div id="mira" hidden></div>
+  <div id="aviso" class="panel" hidden></div>
+
+  <div id="portada">
+    <div class="tarjeta panel">
+      <h2 id="portada-titulo">Recorré la casa caminando</h2>
+      <p>Arrancás en la vereda, frente a la puerta. La escalera del patio sube a la terraza.</p>
+      <div class="teclas solo-teclado">
+        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Caminar (Shift para correr)</span>
+        <span><kbd>Mouse</kbd></span><span>Mirar alrededor</span>
+        <span><kbd>F</kbd></span><span>Volar: Espacio sube, C baja</span>
+        <span><kbd>R</kbd></span><span>Volver a la entrada</span>
+        <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span><span>Día, atardecer o noche</span>
+        <span><kbd>Q</kbd></span><span>Calidad alta o media</span>
+        <span><kbd>Esc</kbd></span><span>Pausa</span>
+      </div>
+      <p class="tactil">Apoyá el dedo en la mitad izquierda de la pantalla y deslizalo para caminar. Con la mitad derecha mirás alrededor. Para subir a la terraza, usá la escalera del patio o tocá Volar.</p>
+      <button id="b-entrar" class="entrar">Entrar</button>
+    </div>
+  </div>
+
+  <div id="carga">
+    <div class="tarjeta">
+      <h2>Casa en L</h2>
+      <p id="carga-texto">Cargando el motor 3D…</p>
+      <div class="barra-carga"><div id="carga-barra"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // si los módulos no llegan a cargar, que la pantalla de carga lo diga en vez de quedar trabada
+  setTimeout(function () {
+    if (!window.__casaLista) {
+      var t = document.getElementById('carga-texto');
+      if (t) t.textContent = 'No se pudo cargar el motor 3D. Revisá la conexión y recargá la página.';
+    }
+  }, 30000);
+</script>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/+esm';
+import { Sky } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/objects/Sky.js/+esm';
+import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js/+esm';
+import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/RenderPass.js/+esm';
+import { GTAOPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/GTAOPass.js/+esm';
+import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js/+esm';
+import { OutputPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/OutputPass.js/+esm';
+import { mergeGeometries, mergeVertices } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js/+esm';
+import { RoundedBoxGeometry } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/geometries/RoundedBoxGeometry.js/+esm';
+
+// Coordenadas de plano: x = ancho del terreno, z = fondo (z = 0 es la línea de la calle), y = altura, en metros.
+// En Three.js la calle queda hacia +z, así que el z del plano se invierte al construir.
+const ALTO_MURO = 2.8, NIVEL_TERRAZA = 3.0, ESP_EXT = 0.2, ESP_INT = 0.12;
+const INICIO = { x: 3, z: -1.5 };
+const BANANA = { x: 10.1, z: 8.6 };
+
+const $ = (id) => document.getElementById(id);
+// cede el control para que se pinte el progreso; setTimeout sigue andando aunque la pestaña esté en segundo plano
+const esperar = () => new Promise((r) => setTimeout(r, 0));
+const col = (r, g, b) => new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace);
+const azar = (semilla) => () => {
+  semilla |= 0; semilla = (semilla + 0x6d2b79f5) | 0;
+  let t = Math.imul(semilla ^ (semilla >>> 15), 1 | semilla);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+function progreso(texto, fraccion) {
+  $('carga-texto').textContent = texto;
+  $('carga-barra').style.width = `${Math.round(fraccion * 100)}%`;
+}
+
+// ---------- Texturas procedurales (repiten sin costura) ----------
+// en celulares las texturas van a la mitad de resolución: se generan cuatro veces más rápido
+const ES_TACTIL = matchMedia('(pointer: coarse)').matches;
+const N = ES_TACTIL ? 256 : 512;
+function hash(x, y, s) {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 1274126177)) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 1103515245) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
+  return (h & 0xffffff) / 16777215;
+}
+const mod = (a, m) => ((a % m) + m) % m;
+function ruido(x, y, px, py, s) {
+  const x0 = Math.floor(x), y0 = Math.floor(y);
+  let fx = x - x0, fy = y - y0;
+  fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+  const xa = mod(x0, px), xb = mod(x0 + 1, px), ya = mod(y0, py), yb = mod(y0 + 1, py);
+  const a = hash(xa, ya, s), b = hash(xb, ya, s), c = hash(xa, yb, s), d = hash(xb, yb, s);
+  const ab = a + (b - a) * fx, cd = c + (d - c) * fx;
+  return ab + (cd - ab) * fy;
+}
+function fbm(u, v, cx, cy, oct, s) {
+  let suma = 0, amp = 0.5, norma = 0;
+  for (let o = 0; o < oct; o++) {
+    suma += amp * ruido(u * cx, v * cy, cx, cy, s + o * 31);
+    norma += amp; amp *= 0.5; cx *= 2; cy *= 2;
+  }
+  return suma / norma;
+}
+const frac = (x) => x - Math.floor(x);
+const suave = (a, b, x) => { let t = (x - a) / (b - a); t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); };
+const mez = (c1, c2, t) => [c1[0] + (c2[0] - c1[0]) * t, c1[1] + (c2[1] - c1[1]) * t, c1[2] + (c2[2] - c1[2]) * t];
+const por = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
+
+const RECETAS = {
+  Revoque: { relieve: 2, f(u, v) {
+    const h = fbm(u, v, 6, 6, 5, 1) * 0.6 + fbm(u, v, 48, 48, 3, 2) * 0.4;
+    return [por([0.93, 0.91, 0.86], 0.9 + 0.12 * h), h];
+  } },
+  Ladrillo: { relieve: 5, f(u, v) { // 1 m: 4 ladrillos de 25 cm por hilada, 16 hiladas
+    const fila = v * 16, f = Math.floor(fila);
+    const c = u * 4 + (f % 2) * 0.5, ci = mod(Math.floor(c), 4);
+    const fu = frac(c), fv = frac(fila);
+    const junta = Math.min(Math.min(fu, 1 - fu) * 0.25, Math.min(fv, 1 - fv) * 0.0625);
+    const n = fbm(u, v, 32, 32, 4, 4);
+    const ladrillo = por(mez([0.55, 0.25, 0.17], [0.74, 0.40, 0.26], hash(ci, f, 3)), 0.82 + 0.3 * n);
+    const mezcla = por([0.74, 0.71, 0.65], 0.9 + 0.15 * n);
+    const m = suave(0.004, 0.008, junta);
+    return [mez(mezcla, ladrillo, m), m * 0.8 + n * 0.2];
+  } },
+  Madera: { relieve: 1.5, f(u, v) {
+    const g = fbm(u, v, 2, 24, 4, 5);
+    const t = Math.pow(0.5 + 0.5 * Math.sin((v * 40 + g * 4) * Math.PI * 2), 3);
+    const fino = fbm(u, v, 8, 256, 2, 7);
+    return [por(mez([0.62, 0.42, 0.25], [0.40, 0.24, 0.13], t * 0.6 + g * 0.4), 0.88 + 0.2 * fino), t * 0.4 + fino * 0.6];
+  } },
+  Pasto: { relieve: 3, f(u, v) {
+    const grande = fbm(u, v, 4, 4, 4, 8), medio = fbm(u, v, 24, 24, 3, 21), fino = fbm(u, v, 128, 128, 2, 9);
+    let c = mez([0.20, 0.40, 0.11], [0.40, 0.58, 0.19], grande);
+    c = mez(c, [0.55, 0.55, 0.26], suave(0.62, 0.75, medio) * 0.5);
+    return [por(c, 0.7 + 0.5 * fino), fino];
+  } },
+  Porcelanato: { relieve: 2, f(u, v) { // 1,2 m: placas de 60 cm
+    const fu = frac(u * 2), fv = frac(v * 2);
+    const junta = Math.min(Math.min(fu, 1 - fu), Math.min(fv, 1 - fv)) * 0.6;
+    const n = fbm(u, v, 4, 4, 5, 10);
+    const veta = Math.abs(Math.sin((u + v * 2) * Math.PI * 4 + n * 9));
+    const oscuro = Math.pow(1 - veta, 18) * 0.05;
+    const placa = por([0.86, 0.83, 0.78], 0.95 + 0.06 * n).map((x) => x - oscuro);
+    const m = suave(0.0015, 0.003, junta);
+    return [mez([0.55, 0.53, 0.50], placa, m), m];
+  } },
+  Vereda: { relieve: 3, f(u, v) { // baldosas de 50 cm
+    const fu = frac(u * 2), fv = frac(v * 2);
+    const junta = Math.min(Math.min(fu, 1 - fu), Math.min(fv, 1 - fv)) * 0.5;
+    const n = fbm(u, v, 16, 16, 4, 11), grano = fbm(u, v, 128, 128, 1, 22);
+    const baldosa = por([0.70, 0.69, 0.66], (0.85 + 0.2 * n) * (0.92 + 0.12 * grano));
+    const m = suave(0.003, 0.006, junta);
+    return [mez([0.45, 0.45, 0.43], baldosa, m), m * 0.7 + n * 0.3];
+  } },
+  Asfalto: { relieve: 2, f(u, v, i, j) {
+    const n = fbm(u, v, 64, 64, 3, 12);
+    let c = por([0.17, 0.17, 0.18], 0.75 + 0.5 * n);
+    if (hash(i, j, 13) > 0.985) c = c.map((x) => x + 0.18);
+    return [c, n];
+  } },
+  Hormigon: { relieve: 1.5, f(u, v) {
+    const n = fbm(u, v, 8, 8, 5, 14), grano = fbm(u, v, 64, 64, 2, 23);
+    return [por([0.63, 0.63, 0.61], (0.82 + 0.22 * n) * (0.94 + 0.1 * grano)), n * 0.5 + grano * 0.5];
+  } },
+  Granito: { relieve: 0.6, f(u, v) {
+    const f = fbm(u, v, 96, 96, 2, 15), b = fbm(u, v, 24, 24, 3, 16);
+    let c = por([0.24, 0.24, 0.25], 0.8 + 0.4 * b);
+    c = mez(c, [0.80, 0.80, 0.78], suave(0.64, 0.70, f));
+    c = mez(c, [0.06, 0.06, 0.07], suave(0.36, 0.30, f));
+    return [c, f];
+  } },
+  Tela: { relieve: 1, f(u, v) { // gris neutro: el color lo pone el material
+    const tejido = 0.5 + 0.5 * Math.sin(u * Math.PI * 2 * 128) * Math.sin(v * Math.PI * 2 * 128);
+    const g = 0.8 * (0.85 + 0.15 * tejido) * (0.92 + 0.1 * fbm(u, v, 8, 8, 3, 24));
+    return [[g, g, g], tejido];
+  } },
+  Azulejo: { relieve: 3, f(u, v) { // 60 cm: 4 x 4 azulejos de 15 cm con pastina
+    const fu = frac(u * 4), fv = frac(v * 4);
+    const junta = Math.min(Math.min(fu, 1 - fu), Math.min(fv, 1 - fv)) * 0.15;
+    const tono = 0.97 + 0.03 * hash(Math.floor(u * 4), Math.floor(v * 4), 26);
+    const brillo = 0.98 + 0.02 * fbm(u, v, 16, 16, 2, 27);
+    const m = suave(0.001, 0.002, junta);
+    return [mez([0.68, 0.68, 0.66], por([0.93, 0.95, 0.96], tono * brillo), m), m];
+  } },
+  Cuero: { relieve: 2.5, f(u, v) { // gris neutro: el color lo pone el material
+    const poro = fbm(u, v, 96, 96, 2, 28), arruga = fbm(u, v, 8, 8, 4, 29);
+    const g = 0.55 * (0.8 + 0.25 * poro) * (0.85 + 0.2 * arruga);
+    return [[g, g, g], poro * 0.6 + arruga * 0.4];
+  } },
+  Banana: { relieve: 0, f(u, v) {
+    const f = fbm(u, v, 24, 24, 3, 17), mancha = fbm(u, v, 3, 3, 3, 18);
+    const c = mez([0.96, 0.82, 0.22], [0.78, 0.60, 0.15], suave(0.55, 0.75, mancha));
+    return [mez(c, [0.33, 0.20, 0.07], suave(0.66, 0.72, f)), 0];
+  } },
+  Follaje: { relieve: 5, f(u, v) { // hojas chicas: manchas finas con huecos oscuros entre ellas
+    const hojas = fbm(u, v, 64, 64, 3, 19), tono = fbm(u, v, 6, 6, 3, 25);
+    const c = mez([0.13, 0.30, 0.08], [0.36, 0.55, 0.17], tono);
+    return [por(c, 0.45 + 0.6 * suave(0.35, 0.6, hojas)), hojas];
+  } },
+  Corteza: { relieve: 5, f(u, v) {
+    const n = fbm(u, v, 40, 3, 4, 20);
+    return [por([0.36, 0.26, 0.18], 0.55 + 0.65 * n), n];
+  } },
+};
+
+const texturas = {};
+let anisotropia = 8;
+function generarTextura(nombre) {
+  const receta = RECETAS[nombre];
+  const lienzo = document.createElement('canvas');
+  lienzo.width = lienzo.height = N;
+  const ctx = lienzo.getContext('2d');
+  const img = ctx.createImageData(N, N);
+  const alto = receta.relieve ? new Float32Array(N * N) : null;
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const [c, h] = receta.f(i / N, j / N, i, j);
+      const k = (j * N + i) * 4;
+      img.data[k] = c[0] * 255; img.data[k + 1] = c[1] * 255; img.data[k + 2] = c[2] * 255; img.data[k + 3] = 255;
+      if (alto) alto[j * N + i] = h;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const color = new THREE.CanvasTexture(lienzo);
+  color.colorSpace = THREE.SRGBColorSpace;
+  let normal = null;
+  if (alto) {
+    const ln = document.createElement('canvas');
+    ln.width = ln.height = N;
+    const cn = ln.getContext('2d');
+    const im = cn.createImageData(N, N);
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const dx = (alto[j * N + (i + 1) % N] - alto[j * N + (i - 1 + N) % N]) * receta.relieve;
+        // en el lienzo j crece hacia abajo y la textura se da vuelta: la pendiente en v va invertida
+        const dy = (alto[((j - 1 + N) % N) * N + i] - alto[((j + 1) % N) * N + i]) * receta.relieve;
+        const l = Math.hypot(dx, dy, 1);
+        const k = (j * N + i) * 4;
+        im.data[k] = (-dx / l * 0.5 + 0.5) * 255; im.data[k + 1] = (-dy / l * 0.5 + 0.5) * 255;
+        im.data[k + 2] = (1 / l * 0.5 + 0.5) * 255; im.data[k + 3] = 255;
+      }
+    }
+    cn.putImageData(im, 0, 0);
+    normal = new THREE.CanvasTexture(ln);
+  }
+  for (const t of [color, normal]) {
+    if (!t) continue;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = anisotropia;
+  }
+  texturas[nombre] = { color, normal };
+}
+
+// ---------- Materiales ----------
+const M = {};
+function material(nombre, { color = col(1, 1, 1), textura = null, metros = 1, suavidad = 0.2, metalico = 0, transparente = false, emision = 0, barniz = false, reflejo = 0.45 } = {}) {
+  // el reflejo del cielo entra también en los interiores, así que por defecto va atenuado
+  const opciones = { color, roughness: 1 - suavidad, metalness: metalico, envMapIntensity: reflejo };
+  if (textura) {
+    const base = texturas[textura];
+    const ajustar = (t) => { const c = t.clone(); c.repeat.set(1 / metros, 1 / metros); c.needsUpdate = true; return c; };
+    opciones.map = ajustar(base.color);
+    if (base.normal) opciones.normalMap = ajustar(base.normal);
+  }
+  let m;
+  if (transparente) {
+    m = new THREE.MeshPhysicalMaterial({ ...opciones, transparent: true, opacity: 0.22, depthWrite: false });
+    m.userData.sinSombra = true;
+  } else if (barniz) {
+    // pintura de auto y cerámica esmaltada: capa de laca encima del color
+    m = new THREE.MeshPhysicalMaterial({ ...opciones, clearcoat: 1, clearcoatRoughness: 0.06 });
+  } else {
+    m = new THREE.MeshStandardMaterial(opciones);
+  }
+  if (emision > 0) {
+    m.emissive = color.clone();
+    m.emissiveIntensity = emision;
+    m.userData.emisionBase = emision;
+  }
+  m.name = nombre;
+  M[nombre] = m;
+  return m;
+}
+function crearMateriales() {
+  material('muro', { textura: 'Revoque', metros: 1.5, suavidad: 0.15 });
+  material('ladrillo', { textura: 'Ladrillo', metros: 1, suavidad: 0.1 });
+  material('piso', { color: col(1, 0.96, 0.9), textura: 'Porcelanato', metros: 1.2, suavidad: 0.6 });
+  material('cielorraso', { color: col(1, 0.98, 0.95), textura: 'Revoque', metros: 3, suavidad: 0.05 });
+  material('losa', { textura: 'Hormigon', metros: 2, suavidad: 0.1 });
+  material('vidrio', { color: col(0.75, 0.85, 0.92), suavidad: 0.95, transparente: true });
+  material('vidrioOscuro', { color: col(0.05, 0.07, 0.09), suavidad: 0.95, metalico: 0.3, reflejo: 1 });
+  material('madera', { textura: 'Madera', metros: 2, suavidad: 0.35 });
+  material('maderaOscura', { color: col(0.55, 0.45, 0.4), textura: 'Madera', metros: 1.5, suavidad: 0.4 });
+  material('cesped', { textura: 'Pasto', metros: 2, suavidad: 0.05 });
+  material('cespedVecino', { color: col(0.8, 0.82, 0.7), textura: 'Pasto', metros: 6, suavidad: 0.05 });
+  material('vereda', { textura: 'Vereda', metros: 1, suavidad: 0.15 });
+  material('calle', { textura: 'Asfalto', metros: 3, suavidad: 0.12 });
+  material('metal', { color: col(0.13, 0.13, 0.14), suavidad: 0.6, metalico: 0.8 });
+  material('goma', { color: col(0.04, 0.04, 0.04), suavidad: 0.2 });
+  material('fuego', { color: col(1, 0.45, 0.1), emision: 4 });
+  material('piedra', { textura: 'Granito', metros: 1, suavidad: 0.75 });
+  material('tela', { color: col(0.42, 0.55, 0.72), textura: 'Tela', metros: 0.5, suavidad: 0.05 });
+  material('telaClara', { color: col(1, 0.98, 0.92), textura: 'Tela', metros: 0.5, suavidad: 0.05 });
+  material('auto', { color: col(0.07, 0.17, 0.42), suavidad: 0.62, metalico: 0.6, barniz: true, reflejo: 1 });
+  material('pinturaMoto', { color: col(0.55, 0.04, 0.03), suavidad: 0.55, metalico: 0.5, barniz: true, reflejo: 0.8 });
+  M.pinturaMotoDoble = M.pinturaMoto.clone();
+  M.pinturaMotoDoble.side = THREE.DoubleSide;
+  material('metalClaro', { color: col(0.55, 0.56, 0.57), suavidad: 0.55, metalico: 0.85, reflejo: 0.8 });
+  material('cromo', { color: col(0.86, 0.87, 0.88), suavidad: 0.92, metalico: 1, reflejo: 1 });
+  material('espejo', { color: col(0.92, 0.93, 0.94), suavidad: 0.98, metalico: 1, reflejo: 1.2 });
+  material('ceramica', { color: col(0.96, 0.96, 0.95), suavidad: 0.85, barniz: true, reflejo: 0.7 });
+  material('farol', { color: col(1, 0.97, 0.9), emision: 2.5 });
+  material('stop', { color: col(0.85, 0.05, 0.03), emision: 1.2 });
+  material('plasticoNegro', { color: col(0.05, 0.05, 0.055), suavidad: 0.45 });
+  material('metalOscuro', { color: col(0.07, 0.07, 0.075), suavidad: 0.55, metalico: 0.7, reflejo: 0.8 });
+  material('pinza', { color: col(0.85, 0.58, 0.12), suavidad: 0.6, metalico: 0.7, reflejo: 0.8 });
+  material('giro', { color: col(1, 0.55, 0.08), emision: 0.6 });
+  // piezas abiertas (pasaruedas, interior de llantas) que se ven por dentro
+  for (const n of ['plasticoNegro', 'metalOscuro']) {
+    M[`${n}Doble`] = M[n].clone();
+    M[`${n}Doble`].side = THREE.DoubleSide;
+  }
+  material('azulejo', { textura: 'Azulejo', metros: 0.6, suavidad: 0.85, reflejo: 0.7 });
+  material('cuero', { color: col(0.32, 0.22, 0.16), textura: 'Cuero', metros: 0.4, suavidad: 0.35 });
+  material('asientoMoto', { color: col(0.1, 0.09, 0.09), suavidad: 0.35 });
+  material('plasticoAzul', { color: col(0.12, 0.42, 0.85), suavidad: 0.5 });
+  material('plasticoNaranja', { color: col(0.95, 0.48, 0.1), suavidad: 0.5 });
+  material('mimbre', { color: col(0.78, 0.62, 0.4), textura: 'Tela', metros: 0.25, suavidad: 0.1 });
+  material('patente', { color: col(0.95, 0.95, 0.93), suavidad: 0.5 });
+  material('hoja', { textura: 'Follaje', metros: 1, suavidad: 0.1 });
+  material('tronco', { textura: 'Corteza', metros: 1, suavidad: 0.05 });
+  material('banana', { textura: 'Banana', metros: 0.2, suavidad: 0.45 });
+  material('luz', { color: col(1, 0.85, 0.6), emision: 2 });
+  material('maceta', { color: col(0.78, 0.45, 0.3), textura: 'Revoque', metros: 0.6, suavidad: 0.1 });
+  material('vecino1', { color: col(0.93, 0.86, 0.74), textura: 'Revoque', metros: 1.5, suavidad: 0.1 });
+  material('vecino2', { color: col(0.78, 0.82, 0.86), textura: 'Revoque', metros: 1.5, suavidad: 0.1 });
+}
+
+// ---------- Construcción ----------
+const escena = new THREE.Scene();
+const cubetas = new Map();      // material -> geometrías para unir en una sola malla
+const colisiones = [];          // cajas en coordenadas de Three.js
+const sueltos = new THREE.Group(); // piezas que no se unen (esferas, cilindros, barras)
+escena.add(sueltos);
+const v3 = (x, y, z) => new THREE.Vector3(x, y, -z);
+
+function uvMundo(g) {
+  const p = g.attributes.position, n = g.attributes.normal, uv = g.attributes.uv;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = -p.getZ(i);
+    if (Math.abs(n.getX(i)) > 0.5) uv.setXY(i, z, y);
+    else if (Math.abs(n.getY(i)) > 0.5) uv.setXY(i, x, z);
+    else uv.setXY(i, x, y);
+  }
+  uv.needsUpdate = true;
+}
+
+// caja en coordenadas de plano; las UV quedan en metros de mundo para que la textura conserve la escala real
+function caja(x0, y0, z0, x1, y1, z1, m, colisiona = true) {
+  const min = new THREE.Vector3(Math.min(x0, x1), Math.min(y0, y1), -Math.max(z0, z1));
+  const max = new THREE.Vector3(Math.max(x0, x1), Math.max(y0, y1), -Math.min(z0, z1));
+  const tam = max.clone().sub(min);
+  if (tam.x < 0.001 || tam.y < 0.001 || tam.z < 0.001) return;
+  const g = new THREE.BoxGeometry(tam.x, tam.y, tam.z);
+  g.translate((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2);
+  uvMundo(g);
+  if (!cubetas.has(m)) cubetas.set(m, []);
+  cubetas.get(m).push(g);
+  if (colisiona) colisiones.push({ min, max });
+}
+
+function suelto(malla, sombra = true) {
+  malla.castShadow = sombra;
+  malla.receiveShadow = true;
+  sueltos.add(malla);
+  return malla;
+}
+const geoEsfera = new THREE.SphereGeometry(0.5, 24, 16);
+const geoCilindro = new THREE.CylinderGeometry(0.5, 0.5, 1, 28);
+// follaje: esferas deformadas con ruido para que las copas y arbustos no sean bolas perfectas
+const geoFollaje = [11, 23, 37, 41].map((semilla) => {
+  const g = mergeVertices(new THREE.IcosahedronGeometry(0.5, 3));
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const k = 0.82 + 0.3 * fbm(x + 0.5, y + 0.5, 3, 3, 2, semilla + Math.round(z * 4) * 13) + 0.08 * hash(Math.round(x * 97), Math.round(y * 89) + Math.round(z * 83) * 7, semilla);
+    p.setXYZ(i, x * k, y * k, z * k);
+  }
+  g.computeVertexNormals();
+  return g;
+});
+let follajes = 0;
+function esfera(x, y, z, sx, sy, sz, m, colisiona = true) {
+  const e = suelto(new THREE.Mesh(m === M.hoja ? geoFollaje[follajes++ % geoFollaje.length] : geoEsfera, m));
+  e.position.copy(v3(x, y, z));
+  e.scale.set(sx, sy, sz);
+  if (colisiona) colisiones.push({ min: v3(x - sx * 0.4, y - sy * 0.4, z + sz * 0.4), max: v3(x + sx * 0.4, y + sy * 0.4, z - sz * 0.4) });
+  return e;
+}
+function cilindro(x, y, z, radio, alto, m, colisiona = true) {
+  const c = suelto(new THREE.Mesh(geoCilindro, m));
+  c.position.copy(v3(x, y + alto / 2, z));
+  c.scale.set(radio * 2, alto, radio * 2);
+  if (colisiona) colisiones.push({ min: v3(x - radio, y, z + radio), max: v3(x + radio, y + alto, z - radio) });
+  return c;
+}
+function barra(a, b, grosor, m) {
+  const pa = v3(...a), pb = v3(...b);
+  const largo = pa.distanceTo(pb);
+  const malla = suelto(new THREE.Mesh(new THREE.BoxGeometry(grosor, grosor, largo), m));
+  malla.position.copy(pa).add(pb).multiplyScalar(0.5);
+  malla.lookAt(pb);
+  return malla;
+}
+// caja de bordes redondeados (almohadones, electrodomésticos, mochila del inodoro)
+function redondeada(x0, y0, z0, x1, y1, z1, radio, m, colisiona = false) {
+  const w = Math.abs(x1 - x0), h = Math.abs(y1 - y0), d = Math.abs(z1 - z0);
+  const r = Math.min(radio, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001);
+  const malla = suelto(new THREE.Mesh(new RoundedBoxGeometry(w, h, d, 3, r), m));
+  malla.position.copy(v3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2));
+  if (colisiona) colisiones.push({ min: v3(Math.min(x0, x1), Math.min(y0, y1), Math.max(z0, z1)), max: v3(Math.max(x0, x1), Math.max(y0, y1), Math.min(z0, z1)) });
+  return malla;
+}
+// caño entre dos puntos de plano
+const ARRIBA = new THREE.Vector3(0, 1, 0);
+function tubo(a, b, radio, m) {
+  const pa = v3(...a), pb = v3(...b);
+  const dir = pb.clone().sub(pa);
+  const malla = suelto(new THREE.Mesh(new THREE.CylinderGeometry(radio, radio, dir.length(), 14), m));
+  malla.position.copy(pa).add(pb).multiplyScalar(0.5);
+  malla.quaternion.setFromUnitVectors(ARRIBA, dir.normalize());
+  return malla;
+}
+function cilindroOval(x, y, z, rx, rz, alto, m) {
+  const c = suelto(new THREE.Mesh(geoCilindro, m));
+  c.position.copy(v3(x, y + alto / 2, z));
+  c.scale.set(rx * 2, alto, rz * 2);
+  return c;
+}
+// disco o aro con el eje a lo largo de x del plano (ruedas vistas de costado)
+function aro(x, y, z, radio, tubo2, m) {
+  const t = suelto(new THREE.Mesh(new THREE.TorusGeometry(radio, tubo2, 14, 40), m));
+  t.position.copy(v3(x, y, z));
+  t.rotation.y = Math.PI / 2;
+  return t;
+}
+function disco(x, y, z, radio, ancho, m) {
+  const d = suelto(new THREE.Mesh(geoCilindro, m));
+  d.position.copy(v3(x, y, z));
+  d.rotation.z = Math.PI / 2;
+  d.scale.set(radio * 2, ancho, radio * 2);
+  return d;
+}
+
+// muro recto con huecos (puertas y ventanas con marco); se alarga medio espesor para cerrar las esquinas
+function muro(ax, az, bx, bz, esp, alto, m, huecos = []) {
+  const largo = Math.hypot(bx - ax, bz - az);
+  const dx = (bx - ax) / largo, dz = (bz - az) / largo;
+  const enX = Math.abs(dx) > 0.5;
+  const ext = esp / 2;
+  const tramo = (t0, t1, y0, y1, mat, grosor) => {
+    if (t1 - t0 < 0.001 || y1 - y0 < 0.001) return;
+    const cx = ax + dx * (t0 + t1) / 2, cz = az + dz * (t0 + t1) / 2;
+    const hx = enX ? (t1 - t0) / 2 : grosor / 2, hz = enX ? grosor / 2 : (t1 - t0) / 2;
+    caja(cx - hx, y0, cz - hz, cx + hx, y1, cz + hz, mat);
+  };
+  let cursor = -ext;
+  for (const h of [...huecos].sort((a, b) => a.desde - b.desde)) {
+    tramo(cursor, h.desde, 0, alto, m, esp);
+    tramo(h.desde, h.hasta, 0, h.piso, m, esp);
+    tramo(h.desde, h.hasta, h.techo, alto, m, esp);
+    const marco = h.vidrio || h.techo > 2.2 ? M.metal : M.maderaOscura;
+    const prof = esp + 0.02;
+    tramo(h.desde, h.desde + 0.05, h.piso, h.techo, marco, prof);
+    tramo(h.hasta - 0.05, h.hasta, h.piso, h.techo, marco, prof);
+    tramo(h.desde, h.hasta, h.techo - 0.05, h.techo, marco, prof);
+    if (h.vidrio) {
+      tramo(h.desde, h.hasta, h.piso, h.piso + 0.05, marco, prof);
+      if (h.hasta - h.desde > 1.6) {
+        const medio = (h.desde + h.hasta) / 2;
+        tramo(medio - 0.025, medio + 0.025, h.piso, h.techo, marco, prof);
+      }
+      tramo(h.desde, h.hasta, h.piso, h.techo, M.vidrio, 0.02);
+      if (h.piso > 0) tramo(h.desde - 0.04, h.hasta + 0.04, h.piso - 0.04, h.piso, M.piedra, esp + 0.08);
+    }
+    cursor = h.hasta;
+  }
+  tramo(cursor, largo + ext, 0, alto, m, esp);
+}
+const puerta = (desde, hasta) => ({ desde, hasta, piso: 0, techo: 2.1, vidrio: false });
+const ventana = (desde, hasta) => ({ desde, hasta, piso: 0.9, techo: 2.1, vidrio: true });
+const ventanal = (desde, hasta) => ({ desde, hasta, piso: 0, techo: 2.4, vidrio: true });
+
+function parapeto(x0, y0, z0, x1, y1, z1) {
+  caja(x0, y0, z0, x1, y1, z1, M.muro);
+  caja(x0 - 0.03, y1, z0 - 0.03, x1 + 0.03, y1 + 0.04, z1 + 0.03, M.piedra);
+}
+function mesa(x0, z0, x1, z1, piso, m) {
+  caja(x0, piso + 0.72, z0, x1, piso + 0.76, z1, m);
+  for (const x of [x0 + 0.05, x1 - 0.1]) for (const z of [z0 + 0.05, z1 - 0.1]) caja(x, piso, z, x + 0.05, piso + 0.72, z + 0.05, m);
+}
+function cama(x0, z0, x1, z1) {
+  caja(x0, 0, z0, x1, 0.3, z1, M.maderaOscura);
+  caja(x0 + 0.03, 0.3, z0 + 0.03, x1 - 0.03, 0.52, z1 - 0.03, M.telaClara);
+  caja(x0, 0.45, z0 - 0.02, x1, 0.55, z1 - 0.45, M.tela);
+  caja(x0 + 0.1, 0.52, z1 - 0.4, x1 - 0.1, 0.64, z1 - 0.1, M.telaClara);
+  caja(x0 - 0.05, 0, z1 - 0.05, x1 + 0.05, 1.0, z1 + 0.02, M.maderaOscura);
+}
+// silla girada de a 90°: cada pieza se rota alrededor de su centro y sigue siendo una caja alineada
+function silla(px, y, pz, giro) {
+  const a = giro * Math.PI / 180, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a));
+  const pieza = (x0, y0, z0, x1, y1, z1, m) => {
+    const p = [[x0, z0], [x1, z1]].map(([x, z]) => [px + x * c + z * s, pz - x * s + z * c]);
+    caja(p[0][0], y + y0, p[0][1], p[1][0], y + y1, p[1][1], m);
+  };
+  pieza(-0.22, 0.42, -0.22, 0.22, 0.46, 0.22, M.madera);
+  pieza(-0.22, 0.46, -0.22, 0.22, 0.9, -0.19, M.madera);
+  for (const x of [-0.2, 0.17]) for (const z of [-0.2, 0.17]) pieza(x, 0, z, x + 0.03, 0.42, z + 0.03, M.metal);
+}
+function arbusto(x, y, z, tam, r) {
+  for (let k = 0; k < 3; k++) {
+    const s = tam * (0.75 + 0.25 * r());
+    esfera(x + (r() - 0.5) * 0.5 * tam, y + tam * (0.4 + 0.1 * k), z + (r() - 0.5) * 0.5 * tam, s, s, s, M.hoja);
+  }
+}
+
+function construirTerreno() {
+  caja(0, -0.1, 0, 15, 0, 15, M.cesped);
+  // el entorno queda apenas por debajo de la calle para no taparla
+  caja(-250, -0.2, -250, 265, -0.08, 265, M.cespedVecino);
+  caja(-250, -0.1, -2.5, 265, 0.02, 0, M.vereda);
+  caja(-250, -0.15, -9, 265, -0.05, -2.5, M.calle);
+  caja(-250, -0.1, -11.5, 265, 0.02, -9, M.vereda);
+  caja(-12, 0, 0.5, -0.2, 3.2, 13, M.vecino1);
+  caja(15.2, 0, 1, 26, 3.6, 12, M.vecino2);
+  caja(-14, 0, -24, -2, 4.5, -14, M.vecino2);
+  caja(1, 0, -23, 12, 3.4, -14, M.vecino1);
+  caja(16, 0, -24, 26, 5.5, -15, M.vecino1);
+}
+
+function construirPlantaBaja() {
+  caja(0, 0, 0, 15, 0.05, 6, M.piso);
+  caja(0, 0, 6, 6, 0.05, 15, M.piso);
+
+  muro(0, 0, 15, 0, ESP_EXT, ALTO_MURO, M.muro, [ventana(0.6, 2.0), puerta(2.5, 3.5),
+    { desde: 6.5, hasta: 8.5, piso: 1.1, techo: 2.1, vidrio: true }, { desde: 10.5, hasta: 14.5, piso: 0, techo: 2.3, vidrio: false }]);
+  muro(0, 0, 0, 15, ESP_EXT, ALTO_MURO, M.muro);
+  muro(15, 0, 15, 6, ESP_EXT, ALTO_MURO, M.muro);
+  muro(0, 15, 6, 15, ESP_EXT, ALTO_MURO, M.muro);
+  muro(6, 6, 15, 6, ESP_EXT, ALTO_MURO, M.muro, [ventanal(0.5, 3.8), puerta(5, 6)]);
+  muro(6, 6, 6, 15, ESP_EXT, ALTO_MURO, M.muro, [ventana(1, 2.6), puerta(4, 4.9), ventana(6.2, 8.2)]);
+
+  muro(5, 0, 5, 2.7, ESP_INT, ALTO_MURO, M.muro);
+  muro(10, 0, 10, 6, ESP_INT, ALTO_MURO, M.muro, [puerta(1.2, 2.1)]);
+  muro(1.1, 6, 6, 6, ESP_INT, ALTO_MURO, M.muro);
+  muro(1.1, 6, 1.1, 11.4, ESP_INT, ALTO_MURO, M.muro, [puerta(2, 2.8), puerta(4, 4.8)]);
+  muro(1.1, 9.4, 6, 9.4, ESP_INT, ALTO_MURO, M.muro);
+  muro(3.8, 9.4, 3.8, 11.4, ESP_INT, ALTO_MURO, M.muro);
+  muro(0, 11.4, 6, 11.4, ESP_INT, ALTO_MURO, M.muro, [puerta(0.1, 1.0)]);
+
+  // cocina con barra
+  caja(5.1, 0, 0.1, 9.9, 0.86, 0.68, M.maderaOscura);
+  caja(5.1, 0.86, 0.1, 9.9, 0.9, 0.7, M.piedra);
+  caja(5.1, 1.6, 0.1, 6.4, 2.3, 0.45, M.maderaOscura);
+  caja(8.6, 1.6, 0.1, 9.9, 2.3, 0.45, M.maderaOscura);
+  caja(6, 0, 2.5, 9.94, 1.0, 2.9, M.maderaOscura);
+  caja(6, 1.0, 2.45, 9.94, 1.05, 3.1, M.piedra);
+  for (let i = 0; i < 3; i++) {
+    cilindro(6.8 + i * 1.2, 0, 3.4, 0.04, 0.72, M.metal);
+    cilindro(6.8 + i * 1.2, 0.72, 3.4, 0.2, 0.06, M.madera);
+  }
+  mesa(6.6, 4.1, 8.6, 5.1, 0, M.madera);
+  for (const x of [7.1, 8.1]) {
+    silla(x, 0.05, 3.85, 0);
+    silla(x, 0.05, 5.35, 180);
+  }
+  // sillón de tres cuerpos: base, apoyabrazos, respaldo y almohadones
+  redondeada(1.0, 0.12, 3.6, 3.6, 0.4, 4.5, 0.05, M.tela);
+  redondeada(1.0, 0.12, 3.6, 1.2, 0.66, 4.5, 0.06, M.tela);
+  redondeada(3.4, 0.12, 3.6, 3.6, 0.66, 4.5, 0.06, M.tela);
+  redondeada(1.18, 0.4, 4.22, 3.42, 0.88, 4.5, 0.07, M.tela);
+  for (let i = 0; i < 3; i++) {
+    const x = 1.2 + i * 0.74;
+    redondeada(x + 0.01, 0.38, 3.62, x + 0.73, 0.54, 4.24, 0.06, M.tela);
+    redondeada(x + 0.04, 0.54, 4.06, x + 0.7, 0.92, 4.26, 0.07, M.tela);
+  }
+  for (const x of [1.05, 3.5]) for (const z of [3.65, 4.4]) cilindro(x, 0.05, z, 0.025, 0.07, M.metal, false);
+  redondeada(1.25, 0.56, 3.75, 1.6, 0.86, 3.9, 0.05, M.telaClara).rotation.y = 0.3;
+  colisiones.push({ min: v3(1.0, 0, 4.5), max: v3(3.6, 0.9, 3.6) });
+  caja(1.7, 0, 2.3, 2.9, 0.4, 2.9, M.madera);
+  caja(0.9, 0.05, 1.8, 3.7, 0.06, 4.2, M.telaClara, false);
+  cama(2.4, 12.9, 4.0, 14.9);
+  cama(2.4, 7.4, 3.8, 9.3);
+
+  construirAuto();
+  construirMoto();
+}
+
+// Herramientas para modelar dentro de un grupo propio: x = largo, y = alto, z = ancho.
+function taller(grupo) {
+  const pieza = (geo, m, x = 0, y = 0, z = 0, giroZ = 0) => {
+    const p = new THREE.Mesh(geo, m);
+    p.position.set(x, y, z);
+    p.rotation.z = giroZ;
+    p.castShadow = true;
+    p.receiveShadow = true;
+    grupo.add(p);
+    return p;
+  };
+  // caño entre dos puntos; r2 permite que se afine hacia b (silenciadores, horquillas)
+  const cano = (a, b, r, m, r2 = r) => {
+    const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b);
+    const d = B.clone().sub(A);
+    const p = pieza(new THREE.CylinderGeometry(r2, r, d.length(), 18), m);
+    p.position.copy(A).add(B).multiplyScalar(0.5);
+    p.quaternion.setFromUnitVectors(ARRIBA, d.normalize());
+    return p;
+  };
+  // caño que pasa por varios puntos, con rótulas en los codos para que no se vean cortes
+  const recorrido = (puntos, r, m) => {
+    for (let i = 0; i < puntos.length - 1; i++) cano(puntos[i], puntos[i + 1], r, m);
+    for (let i = 1; i < puntos.length - 1; i++) pieza(new THREE.SphereGeometry(r, 14, 10), m, ...puntos[i]);
+  };
+  // barra redondeada entre dos puntos del plano x-y
+  const barra = (a, b, alto, ancho, z, m) => {
+    const largo = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const r = Math.min(alto, ancho) / 2 - 0.001;
+    return pieza(new RoundedBoxGeometry(largo, alto, ancho, 2, r), m, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, z, Math.atan2(b[1] - a[1], b[0] - a[0]));
+  };
+  // pasos: divisiones a lo ancho; hacen falta cuando la pieza se curva en ese sentido (vidrios)
+  const extruir = (dibujar, ancho, bisel, segmentos = 5, pasos = 1) => {
+    const forma = new THREE.Shape();
+    dibujar(forma);
+    const prof = Math.max(0.001, ancho - 2 * bisel);
+    const g = new THREE.ExtrudeGeometry(forma, {
+      depth: prof, steps: pasos, bevelEnabled: bisel > 0, bevelThickness: bisel, bevelSize: bisel, bevelSegments: segmentos, curveSegments: 28,
+    });
+    g.translate(0, 0, -prof / 2);
+    return g;
+  };
+  // une los vértices repetidos para un sombreado suave y, si se pide, angosta la pieza con escala(x, y).
+  // Las tapas laterales no tienen vértices interiores: su normal se calcula exacta a partir de la escala,
+  // porque promediar triángulos largos deja rayas diagonales en la chapa.
+  const suavizar = (g, escala) => {
+    g.deleteAttribute('normal');
+    g.deleteAttribute('uv');
+    const m = mergeVertices(g, 1e-4);
+    const p = m.attributes.position;
+    const tapa = [];
+    if (escala) {
+      let zmax = 0;
+      for (let i = 0; i < p.count; i++) zmax = Math.max(zmax, Math.abs(p.getZ(i)));
+      for (let i = 0; i < p.count; i++) {
+        const z = p.getZ(i);
+        if (Math.abs(Math.abs(z) - zmax) < 1e-5) tapa.push([i, z]);
+        p.setZ(i, z * escala(p.getX(i), p.getY(i)));
+      }
+    }
+    m.computeVertexNormals();
+    const n = m.attributes.normal, h = 1e-3, v = new THREE.Vector3();
+    for (const [i, z0] of tapa) {
+      const x = p.getX(i), y = p.getY(i);
+      const dx = (escala(x + h, y) - escala(x - h, y)) / (2 * h);
+      const dy = (escala(x, y + h) - escala(x, y - h)) / (2 * h);
+      v.set(-z0 * dx, -z0 * dy, Math.sign(z0)).normalize();
+      n.setXYZ(i, v.x, v.y, v.z);
+    }
+    return m;
+  };
+  return { pieza, cano, recorrido, barra, extruir, suavizar };
+}
+
+// cubierta con perfil de neumático (flancos redondeados), con el eje a lo largo de z
+function cubierta(radio, ancho) {
+  const h = ancho / 2;
+  const perfil = [
+    [radio - 0.11, -h * 0.85], [radio - 0.05, -h], [radio - 0.015, -h * 0.82], [radio, -h * 0.4],
+    [radio, h * 0.4], [radio - 0.015, h * 0.82], [radio - 0.05, h], [radio - 0.11, h * 0.85],
+  ].map(([r, y]) => new THREE.Vector2(r, y));
+  return new THREE.LatheGeometry(perfil, 56).rotateX(Math.PI / 2);
+}
+
+// Auto estacionado de punta: el frente mira al fondo de la cochera.
+// La carrocería sale de un perfil lateral extruido y después deformado: se afina hacia las puntas y se cierra hacia el techo.
+function construirAuto() {
+  const auto = new THREE.Group();
+  auto.position.copy(v3(11.5, 0, 0.55));
+  auto.rotation.y = Math.PI / 2;
+  sueltos.add(auto);
+  const { pieza, extruir, suavizar, barra } = taller(auto);
+  const L = 4.45;
+  const angosto = (s) => 1 - 0.07 * Math.pow(Math.min(1, Math.abs(2 * s / L - 1)), 3.2);
+  const cuerpo = (x, y) => angosto(x) * (1 - 0.06 * suave(0.6, 1.05, y)) * (1 - 0.05 * suave(0.42, 0.2, y));
+  const habitaculo = (x, y) => angosto(x) * (1 - 0.22 * suave(0.98, 1.47, y));
+
+  // carrocería con los pasaruedas
+  pieza(suavizar(extruir((f) => {
+    f.moveTo(0.15, 0.27);
+    f.lineTo(0.53, 0.27);
+    f.absarc(1.0, 0.33, 0.47, Math.PI, 0, true);
+    f.lineTo(2.98, 0.27);
+    f.absarc(3.45, 0.33, 0.47, Math.PI, 0, true);
+    f.lineTo(4.28, 0.27);
+    f.quadraticCurveTo(4.42, 0.29, 4.44, 0.42);
+    f.lineTo(4.43, 0.62);
+    f.quadraticCurveTo(4.42, 0.72, 4.3, 0.74);
+    f.quadraticCurveTo(3.8, 0.86, 3.25, 0.96);
+    f.lineTo(1.0, 0.99);
+    f.quadraticCurveTo(0.45, 0.99, 0.12, 0.93);
+    f.quadraticCurveTo(-0.02, 0.88, 0, 0.7);
+    f.lineTo(0.02, 0.42);
+    f.quadraticCurveTo(0.04, 0.28, 0.15, 0.27);
+  }, 1.78, 0.07, 6), cuerpo), M.auto);
+
+  // habitáculo de chapa; los vidrios van incrustados y asoman apenas por encima
+  pieza(suavizar(extruir((f) => {
+    f.moveTo(0.6, 0.97);
+    f.quadraticCurveTo(0.95, 1.36, 1.45, 1.42);
+    f.lineTo(2.4, 1.43);
+    f.quadraticCurveTo(2.68, 1.42, 2.9, 1.24);
+    f.lineTo(3.28, 0.96);
+    f.closePath();
+  }, 1.56, 0.06, 5), habitaculo), M.auto);
+  const ventanilla = (dibujar) => pieza(suavizar(extruir(dibujar, 1.585, 0), habitaculo), M.vidrioOscuro);
+  ventanilla((f) => { f.moveTo(1.0, 1.0); f.quadraticCurveTo(1.18, 1.3, 1.45, 1.37); f.lineTo(1.98, 1.38); f.lineTo(1.98, 1.0); f.closePath(); });
+  ventanilla((f) => { f.moveTo(2.08, 1.0); f.lineTo(2.08, 1.38); f.lineTo(2.38, 1.38); f.quadraticCurveTo(2.62, 1.37, 2.85, 1.2); f.lineTo(3.1, 1.0); f.closePath(); });
+  // parabrisas y luneta: franjas que siguen la pendiente del habitáculo, un poco por fuera
+  const curva = (p0, p1, p2, t) => [(1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * p1[0] + t * t * p2[0], (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1]];
+  const panel = (puntos, ancho) => {
+    const afuera = [], adentro = [];
+    puntos.forEach((p, i) => {
+      const a = puntos[Math.max(0, i - 1)], b = puntos[Math.min(puntos.length - 1, i + 1)];
+      const n = new THREE.Vector2(b[1] - a[1], -(b[0] - a[0])).normalize();
+      if (n.x * (p[0] - 2.0) + n.y * (p[1] - 1.1) < 0) n.negate();
+      // el vidrio queda entero por fuera de la chapa (que está a 6 cm del perfil por el bisel)
+      afuera.push([p[0] + n.x * 0.09, p[1] + n.y * 0.09]);
+      adentro.push([p[0] + n.x * 0.076, p[1] + n.y * 0.076]);
+    });
+    const g = extruir((f) => {
+      f.moveTo(...afuera[0]);
+      afuera.slice(1).forEach((q) => f.lineTo(...q));
+      adentro.reverse().forEach((q) => f.lineTo(...q));
+      f.closePath();
+    }, ancho, 0, 1, 12);
+    pieza(suavizar(g, habitaculo), M.vidrioOscuro);
+  };
+  panel([[3.24, 0.99], [3.12, 1.08], [2.98, 1.18], [2.9, 1.24], ...[0.25, 0.5, 0.75, 0.92].map((t) => curva([2.9, 1.24], [2.68, 1.42], [2.4, 1.43], t))], 1.3);
+  panel([0.12, 0.25, 0.4, 0.55, 0.7, 0.85].map((t) => curva([0.6, 0.97], [0.95, 1.36], [1.45, 1.42], t)), 1.26);
+
+  // pasaruedas oscuros, faldones y difusor
+  for (const s of [1.0, 3.45]) {
+    const g = new THREE.CylinderGeometry(0.4, 0.4, 1.62, 28, 1, true, Math.PI / 2, Math.PI).rotateX(Math.PI / 2);
+    pieza(g, M.plasticoNegroDoble, s, 0.33, 0);
+  }
+  barra([1.5, 0.24], [2.95, 0.24], 0.08, 1.74, 0, M.plasticoNegro);
+  pieza(new RoundedBoxGeometry(0.1, 0.08, 1.2, 2, 0.03), M.plasticoNegro, 0.04, 0.27, 0);
+
+  for (const lado of [-1, 1]) {
+    // ruedas: cubierta, llanta de 5 rayos dobles, disco y pinza de freno
+    for (const s of [1.0, 3.45]) {
+      const r = new THREE.Group();
+      r.position.set(s, 0.335, lado * 0.765);
+      auto.add(r);
+      const add = (geo, m, x = 0, y = 0, z = 0, giro = 0) => {
+        const p = new THREE.Mesh(geo, m);
+        p.position.set(x, y, z * lado);
+        p.rotation.z = giro;
+        p.castShadow = true;
+        r.add(p);
+        return p;
+      };
+      add(cubierta(0.335, 0.225), M.goma);
+      add(new THREE.CylinderGeometry(0.212, 0.212, 0.19, 40, 1, true).rotateX(Math.PI / 2), M.metalOscuroDoble);
+      add(new THREE.CylinderGeometry(0.16, 0.16, 0.012, 36).rotateX(Math.PI / 2), M.metalClaro, 0, 0, 0.02);
+      add(new RoundedBoxGeometry(0.08, 0.13, 0.05, 2, 0.015), M.pinza, -0.12, 0.08, 0.04);
+      add(new THREE.TorusGeometry(0.205, 0.013, 10, 48), M.cromo, 0, 0, 0.1);
+      add(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 24).rotateX(Math.PI / 2), M.metalOscuro, 0, 0, 0.1);
+      for (let k = 0; k < 5; k++) {
+        for (const d of [-0.11, 0.11]) {
+          const a = k * Math.PI * 2 / 5 + d;
+          add(new RoundedBoxGeometry(0.16, 0.026, 0.028, 2, 0.01), M.cromo, Math.cos(a) * 0.125, Math.sin(a) * 0.125, 0.095, a);
+        }
+      }
+    }
+    // ópticas con luz diurna, faros traseros, espejos y manijas
+    const z = lado * 0.58;
+    pieza(new RoundedBoxGeometry(0.07, 0.1, 0.34, 2, 0.03), M.cromo, 4.45, 0.67, z);
+    pieza(new RoundedBoxGeometry(0.03, 0.07, 0.3, 2, 0.015), M.farol, 4.49, 0.68, z);
+    pieza(new RoundedBoxGeometry(0.02, 0.018, 0.3, 2, 0.008), M.farol, 4.49, 0.62, z);
+    pieza(new RoundedBoxGeometry(0.05, 0.08, 0.42, 2, 0.02), M.stop, -0.08, 0.8, lado * 0.55);
+    pieza(new RoundedBoxGeometry(0.11, 0.08, 0.17, 2, 0.03), M.auto, 3.05, 1.06, lado * 0.93);
+    pieza(new THREE.BoxGeometry(0.01, 0.06, 0.14), M.espejo, 2.995, 1.06, lado * 0.93);
+    for (const s of [1.75, 2.75]) pieza(new RoundedBoxGeometry(0.14, 0.025, 0.02, 2, 0.008), M.cromo, s, 0.88, lado * 0.86);
+  }
+  pieza(new RoundedBoxGeometry(0.05, 0.2, 0.86, 2, 0.03), M.plasticoNegro, 4.5, 0.46, 0);
+  for (const y of [0.42, 0.48, 0.54]) pieza(new THREE.BoxGeometry(0.02, 0.01, 0.8), M.cromo, 4.525, y, 0);
+  pieza(new THREE.BoxGeometry(0.03, 0.03, 0.9), M.stop, -0.085, 0.8, 0);
+  pieza(new THREE.BoxGeometry(0.015, 0.11, 0.5), M.patente, 4.53, 0.32, 0);
+  pieza(new THREE.BoxGeometry(0.015, 0.11, 0.5), M.patente, -0.1, 0.55, 0);
+  pieza(new RoundedBoxGeometry(0.16, 0.05, 0.05, 2, 0.02), M.auto, 1.55, 1.47, 0);
+  colisiones.push({ min: v3(10.6, 0, 5.1), max: v3(12.4, 1.55, 0.45) });
+}
+
+// Moto parada sobre la pata, al lado del auto, con el frente hacia el fondo de la cochera.
+// Se modela desde el eje trasero: x = largo, y = alto, z = ancho (la pata va del lado de z negativo).
+function construirMoto() {
+  const base = new THREE.Group();
+  base.position.copy(v3(14.0, 0, 1.15));
+  base.rotation.y = Math.PI / 2;
+  sueltos.add(base);
+  const moto = new THREE.Group();
+  moto.rotation.x = -0.07; // apoyada sobre la pata
+  base.add(moto);
+  const { pieza, cano, recorrido, barra, extruir, suavizar } = taller(moto);
+  const R = 0.31, H = [1.2, 0.98];
+
+  // ruedas de llanta fundida
+  const rueda = (s, ancho, delantera) => {
+    const g = new THREE.Group();
+    g.position.set(s, R, 0);
+    moto.add(g);
+    const add = (geo, m, x = 0, y = 0, z = 0, giro = 0) => {
+      const p = new THREE.Mesh(geo, m);
+      p.position.set(x, y, z);
+      p.rotation.z = giro;
+      p.castShadow = true;
+      g.add(p);
+      return p;
+    };
+    add(cubierta(R, ancho), M.goma);
+    add(new THREE.CylinderGeometry(0.205, 0.205, ancho * 0.75, 36, 1, true).rotateX(Math.PI / 2), M.metalOscuroDoble);
+    for (const z of [-ancho * 0.36, ancho * 0.36]) add(new THREE.TorusGeometry(0.205, 0.008, 8, 48), M.cromo, 0, 0, z);
+    add(new THREE.CylinderGeometry(0.05, 0.05, ancho * 0.9, 20).rotateX(Math.PI / 2), M.metalClaro);
+    for (let k = 0; k < 5; k++) {
+      const a = k * Math.PI * 2 / 5 + 0.3;
+      add(new RoundedBoxGeometry(0.17, 0.03, 0.035, 2, 0.012), M.metalOscuro, Math.cos(a) * 0.125, Math.sin(a) * 0.125, 0, a);
+    }
+    if (delantera) {
+      for (const z of [-0.075, 0.075]) {
+        add(new THREE.CylinderGeometry(0.14, 0.14, 0.006, 40).rotateX(Math.PI / 2), M.cromo, 0, 0, z);
+        add(new RoundedBoxGeometry(0.09, 0.12, 0.035, 2, 0.012), M.pinza, -0.1, 0.06, z * 1.25);
+      }
+    } else {
+      add(new THREE.CylinderGeometry(0.11, 0.11, 0.006, 36).rotateX(Math.PI / 2), M.cromo, 0, 0, 0.08);
+      add(new THREE.CylinderGeometry(0.13, 0.13, 0.012, 30).rotateX(Math.PI / 2), M.metalOscuro, 0, 0, -0.085);
+    }
+  };
+  rueda(0, 0.15, false);
+  rueda(1.45, 0.12, true);
+
+  // horquilla telescópica, tijas y manubrio
+  const eje = [1.45, R], dir = [H[0] - eje[0], H[1] - eje[1]];
+  const punto = (t, z) => [eje[0] + dir[0] * t, eje[1] + dir[1] * t, z];
+  for (const z of [-0.085, 0.085]) {
+    cano(punto(0, z), punto(0.42, z), 0.03, M.metalOscuro);
+    cano(punto(0.42, z), punto(1.06, z), 0.021, M.cromo);
+  }
+  pieza(new RoundedBoxGeometry(0.1, 0.035, 0.24, 2, 0.012), M.metalOscuro, ...punto(0.9, 0));
+  pieza(new RoundedBoxGeometry(0.1, 0.035, 0.24, 2, 0.012), M.metalOscuro, ...punto(1.04, 0));
+  for (const lado of [-1, 1]) {
+    cano([1.19, 1.0, lado * 0.04], [1.16, 1.07, lado * 0.04], 0.014, M.metalOscuro);
+    recorrido([[1.16, 1.07, 0], [1.13, 1.09, lado * 0.25], [1.07, 1.1, lado * 0.36]], 0.012, M.cromo);
+    cano([1.07, 1.1, lado * 0.36], [1.04, 1.1, lado * 0.47], 0.018, M.goma);
+    cano([1.11, 1.11, lado * 0.29], [1.0, 1.08, lado * 0.42], 0.006, M.cromo);
+    cano([1.12, 1.1, lado * 0.27], [1.09, 1.32, lado * 0.33], 0.005, M.cromo);
+    pieza(new RoundedBoxGeometry(0.02, 0.07, 0.12, 2, 0.008), M.plasticoNegro, 1.09, 1.34, lado * 0.34);
+    // guiños delanteros y traseros
+    cano([1.33, 0.9, lado * 0.06], [1.33, 0.9, lado * 0.16], 0.008, M.metalOscuro);
+    pieza(new THREE.SphereGeometry(0.025, 14, 10), M.giro, 1.34, 0.9, lado * 0.17);
+    cano([-0.33, 0.8, lado * 0.05], [-0.33, 0.8, lado * 0.13], 0.008, M.metalOscuro);
+    pieza(new THREE.SphereGeometry(0.022, 14, 10), M.giro, -0.34, 0.8, lado * 0.14);
+  }
+  // faro redondo, tablero y guardabarros delantero
+  pieza(new THREE.CylinderGeometry(0.095, 0.075, 0.13, 32).rotateZ(-Math.PI / 2), M.cromo, 1.37, 0.93, 0);
+  pieza(new THREE.CylinderGeometry(0.087, 0.087, 0.012, 32).rotateZ(Math.PI / 2), M.farol, 1.44, 0.93, 0);
+  for (const z of [-0.05, 0.05]) {
+    const reloj = pieza(new THREE.CylinderGeometry(0.045, 0.045, 0.04, 24), M.metalOscuro, 1.18, 1.1, z);
+    reloj.rotation.z = 0.9;
+    const cara = pieza(new THREE.CylinderGeometry(0.038, 0.038, 0.005, 24), M.patente, 1.165, 1.12, z);
+    cara.rotation.z = 0.9;
+  }
+  pieza(new THREE.CylinderGeometry(0.36, 0.36, 0.12, 30, 1, true, Math.PI * 0.5, Math.PI * 0.6).rotateX(Math.PI / 2), M.pinturaMotoDoble, 1.45, R, 0);
+
+  // chasis, basculante, amortiguadores y cadena
+  recorrido([[H[0], H[1], 0], [0.62, 0.88, 0], [0.0, 0.83, 0]], 0.022, M.metalOscuro);
+  for (const z of [-0.075, 0.075]) {
+    recorrido([[H[0], 0.95, 0], [1.1, 0.3, z], [0.62, 0.2, z], [0.55, 0.42, z], [0.62, 0.86, z * 0.6]], 0.02, M.metalOscuro);
+    recorrido([[0.55, 0.45, z], [0.0, 0.82, z], [-0.3, 0.84, z * 0.6]], 0.016, M.metalOscuro);
+    barra([0, R], [0.55, 0.42], 0.06, 0.04, z * 1.35, M.metalOscuro);
+    const z2 = z * 1.55, a = [0.08, 0.4, z2], b = [0.3, 0.82, z2];
+    cano(a, b, 0.012, M.cromo);
+    cano([0.22, 0.66, z2], b, 0.026, M.metalOscuro);
+    const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], 0).normalize();
+    for (let k = 0; k < 9; k++) {
+      const t = 0.12 + k * 0.055;
+      const anillo = pieza(new THREE.TorusGeometry(0.028, 0.006, 8, 20), M.plasticoNaranja, a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, z2);
+      anillo.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), d);
+    }
+  }
+  barra([0, R], [0.62, 0.3], 0.03, 0.015, -0.09, M.metalOscuro);
+  pieza(new THREE.CylinderGeometry(0.06, 0.06, 0.015, 20).rotateX(Math.PI / 2), M.metalOscuro, 0.62, 0.3, -0.09);
+
+  // motor: cárter, cilindro inclinado con aletas, culata y tapas laterales cromadas
+  pieza(new RoundedBoxGeometry(0.5, 0.24, 0.3, 3, 0.07), M.metalClaro, 0.8, 0.36, 0);
+  const inclinacion = -0.35, eje2 = [Math.sin(-inclinacion), Math.cos(-inclinacion)];
+  pieza(new RoundedBoxGeometry(0.2, 0.3, 0.26, 2, 0.03), M.metalClaro, 0.96, 0.6, 0, inclinacion);
+  for (let k = 0; k < 8; k++) {
+    const t = -0.12 + k * 0.034;
+    pieza(new RoundedBoxGeometry(0.3, 0.012, 0.34, 1, 0.005), M.metalClaro, 0.96 + eje2[0] * t, 0.6 + eje2[1] * t, 0, inclinacion);
+  }
+  pieza(new RoundedBoxGeometry(0.25, 0.09, 0.3, 2, 0.03), M.metalOscuro, 0.96 + eje2[0] * 0.19, 0.6 + eje2[1] * 0.19, 0, inclinacion);
+  pieza(new RoundedBoxGeometry(0.2, 0.05, 0.24, 2, 0.02), M.cromo, 0.96 + eje2[0] * 0.25, 0.6 + eje2[1] * 0.25, 0, inclinacion);
+  for (const z of [-0.16, 0.16]) pieza(new THREE.CylinderGeometry(0.12, 0.12, 0.03, 32).rotateX(Math.PI / 2), M.cromo, 0.76, 0.36, z);
+  for (const z of [-0.07, 0.07]) pieza(new THREE.CylinderGeometry(0.035, 0.035, 0.12, 16).rotateZ(Math.PI / 2), M.metalOscuro, 0.74, 0.62, z);
+  pieza(new RoundedBoxGeometry(0.28, 0.17, 0.28, 2, 0.04), M.plasticoNegro, 0.42, 0.66, 0);
+
+  // escape: codo desde la culata, por debajo del motor, hasta el silenciador cónico
+  recorrido([[1.07, 0.62, 0.06], [1.16, 0.42, 0.09], [1.12, 0.2, 0.12], [0.75, 0.16, 0.14], [0.45, 0.27, 0.16]], 0.026, M.cromo);
+  cano([0.45, 0.27, 0.17], [-0.12, 0.42, 0.18], 0.068, M.cromo, 0.05);
+  cano([-0.12, 0.42, 0.18], [-0.16, 0.43, 0.18], 0.05, M.metalOscuro);
+
+  // tanque, asiento, colín, guardabarros trasero y portapatente
+  const tanque = pieza(geoEsfera, M.pinturaMoto, 0.92, 0.9, 0, 0.12);
+  tanque.scale.set(0.62, 0.26, 0.38);
+  pieza(new THREE.CylinderGeometry(0.04, 0.04, 0.015, 20), M.cromo, 0.98, 1.03, 0);
+  pieza(suavizar(extruir((f) => {
+    f.moveTo(0.66, 0.87);
+    f.quadraticCurveTo(0.6, 0.97, 0.48, 0.96);
+    f.lineTo(0.15, 0.94);
+    f.quadraticCurveTo(0.0, 0.96, -0.08, 1.0);
+    f.lineTo(-0.12, 0.95);
+    f.quadraticCurveTo(0.0, 0.86, 0.3, 0.84);
+    f.closePath();
+  }, 0.27, 0.035, 4)), M.asientoMoto);
+  pieza(suavizar(extruir((f) => {
+    f.moveTo(0.1, 0.8);
+    f.quadraticCurveTo(-0.15, 0.84, -0.38, 0.92);
+    f.lineTo(-0.41, 0.86);
+    f.quadraticCurveTo(-0.15, 0.76, 0.12, 0.74);
+    f.closePath();
+  }, 0.2, 0.03, 4)), M.pinturaMoto);
+  pieza(new RoundedBoxGeometry(0.03, 0.04, 0.12, 2, 0.01), M.stop, -0.415, 0.885, 0, 0.3);
+  pieza(new THREE.CylinderGeometry(0.36, 0.36, 0.16, 30, 1, true, Math.PI * 0.85, Math.PI * 0.45).rotateX(Math.PI / 2), M.pinturaMotoDoble, 0, R, 0);
+  cano([-0.3, 0.82, 0], [-0.42, 0.6, 0], 0.012, M.metalOscuro);
+  pieza(new THREE.BoxGeometry(0.01, 0.12, 0.2), M.patente, -0.43, 0.58, 0, 0.2);
+
+  // pedalines y pata
+  for (const z of [-1, 1]) cano([0.62, 0.3, z * 0.14], [0.62, 0.3, z * 0.25], 0.015, M.goma);
+  cano([0.6, 0.28, -0.1], [0.5, 0.0, -0.33], 0.013, M.metalOscuro);
+
+  colisiones.push({ min: v3(13.5, 0, 3.0), max: v3(14.5, 1.35, 0.7) });
+}
+
+// Baño: x 1,1 a 3,8 y z 9,4 a 11,4; la puerta da al pasillo. Caras interiores: x 1,16 / 3,74 y z 9,46 / 11,34.
+function construirBano() {
+  // azulejos: paredes de la ducha hasta 2,2 m y detrás del vanitory hasta 1,25 m
+  caja(3.725, 0.05, 9.46, 3.74, 2.2, 11.34, M.azulejo, false);
+  caja(1.16, 0.05, 11.325, 3.725, 2.2, 11.34, M.azulejo, false);
+  caja(1.16, 0.05, 9.46, 3.725, 1.25, 9.468, M.azulejo, false);
+
+  // ducha en el rincón, con plato y mampara de vidrio
+  caja(2.75, 0.05, 10.35, 3.725, 0.1, 11.325, M.ceramica);
+  caja(2.74, 0.1, 10.35, 2.76, 2.0, 11.325, M.vidrio);
+  caja(3.2, 0.1, 10.34, 3.725, 2.0, 10.36, M.vidrio);
+  tubo([2.75, 2.0, 10.35], [3.725, 2.0, 10.35], 0.012, M.cromo);
+  tubo([3.725, 1.95, 10.85], [3.45, 2.08, 10.85], 0.015, M.cromo);
+  cilindro(3.42, 2.0, 10.85, 0.1, 0.03, M.cromo, false);
+  tubo([3.725, 1.1, 10.85], [3.66, 1.1, 10.85], 0.03, M.cromo);
+  tubo([3.66, 1.1, 10.85], [3.66, 1.1, 10.75], 0.012, M.cromo);
+
+  // inodoro contra la pared del fondo
+  cilindroOval(1.9, 0.05, 11.08, 0.12, 0.16, 0.3, M.ceramica);
+  cilindroOval(1.9, 0.3, 11.02, 0.18, 0.24, 0.1, M.ceramica);
+  cilindroOval(1.9, 0.4, 11.02, 0.19, 0.25, 0.025, M.ceramica);
+  redondeada(1.68, 0.42, 11.15, 2.12, 0.84, 11.33, 0.03, M.ceramica);
+  cilindro(1.9, 0.84, 11.24, 0.03, 0.012, M.cromo, false);
+  colisiones.push({ min: v3(1.7, 0, 11.34), max: v3(2.1, 0.45, 10.78) });
+
+  // vanitory con bacha de apoyo, grifería y espejo
+  caja(2.0, 0.05, 9.468, 2.9, 0.78, 9.95, M.maderaOscura);
+  caja(1.98, 0.78, 9.468, 2.92, 0.82, 9.98, M.piedra);
+  for (const x of [2.22, 2.68]) caja(x, 0.45, 9.948, x + 0.12, 0.47, 9.96, M.cromo, false);
+  cilindro(2.45, 0.82, 9.74, 0.19, 0.13, M.ceramica, false);
+  tubo([2.45, 0.82, 9.52], [2.45, 1.08, 9.52], 0.016, M.cromo);
+  tubo([2.45, 1.08, 9.52], [2.45, 1.06, 9.66], 0.014, M.cromo);
+  caja(2.05, 1.1, 9.468, 2.85, 1.9, 9.48, M.espejo, false);
+  caja(2.03, 1.08, 9.466, 2.87, 1.1, 9.482, M.metal, false);
+  // toallero con toalla
+  tubo([1.3, 1.25, 9.53], [1.9, 1.25, 9.53], 0.012, M.cromo);
+  redondeada(1.36, 0.8, 9.49, 1.84, 1.26, 9.56, 0.02, M.telaClara);
+  // alfombra de baño
+  caja(2.85, 0.05, 10.0, 3.55, 0.065, 10.3, M.telaClara, false);
+}
+
+// Lavadero: x 3,8 a 6 y z 9,4 a 11,4; la puerta da al patio. Caras interiores: x 3,86 / 5,94 y z 9,46 / 11,34.
+function construirLavadero() {
+  // lavarropas de carga frontal
+  redondeada(3.92, 0.05, 10.72, 4.52, 0.9, 11.32, 0.035, M.ceramica, true);
+  aro(4.22, 0.45, 10.715, 0.17, 0.03, M.cromo).rotation.y = 0;
+  const ojo = cilindro(4.22, 0.45, 10.72, 0.15, 0.02, M.vidrioOscuro, false);
+  ojo.rotation.x = Math.PI / 2;
+  ojo.position.copy(v3(4.22, 0.45, 10.715));
+  caja(3.95, 0.76, 10.705, 4.49, 0.86, 10.72, M.plasticoNegro, false);
+  cilindro(4.38, 0.81, 10.7, 0.03, 0.02, M.cromo, false).rotation.x = Math.PI / 2;
+
+  // pileta de lavar con mueble y canilla
+  // mueble y bacha honda: cuatro paredes alrededor de un fondo 30 cm más abajo
+  caja(4.62, 0.05, 10.86, 5.42, 0.6, 11.325, M.ceramica);
+  caja(4.62, 0.6, 10.86, 5.42, 0.92, 10.92, M.ceramica);
+  caja(4.62, 0.6, 11.265, 5.42, 0.92, 11.325, M.ceramica);
+  caja(4.62, 0.6, 10.92, 4.68, 0.92, 11.265, M.ceramica);
+  caja(5.36, 0.6, 10.92, 5.42, 0.92, 11.265, M.ceramica);
+  caja(4.68, 0.6, 10.92, 5.36, 0.62, 11.265, M.ceramica, false);
+  caja(4.6, 0.92, 11.32, 5.45, 1.55, 11.34, M.azulejo, false);
+  tubo([5.02, 1.2, 11.325], [5.02, 1.2, 11.12], 0.016, M.cromo);
+  tubo([5.02, 1.2, 11.12], [5.02, 1.1, 11.1], 0.014, M.cromo);
+
+  // termotanque eléctrico con sus caños
+  cilindro(5.55, 0.05, 9.82, 0.27, 1.4, M.ceramica);
+  esfera(5.55, 1.45, 9.82, 0.54, 0.16, 0.54, M.ceramica, false);
+  for (const dx of [-0.1, 0.1]) tubo([5.55 + dx, 1.5, 9.82], [5.55 + dx, 2.78, 9.82], 0.018, M.cromo);
+  caja(5.42, 0.9, 9.54, 5.68, 1.05, 9.56, M.plasticoNegro, false);
+
+  // estante con productos sobre el lavarropas
+  caja(3.9, 1.5, 10.95, 4.62, 1.53, 11.34, M.madera, false);
+  caja(3.98, 1.53, 11.05, 4.14, 1.78, 11.2, M.plasticoAzul, false);
+  caja(4.2, 1.53, 11.07, 4.32, 1.72, 11.19, M.plasticoNaranja, false);
+  cilindro(4.45, 1.53, 11.12, 0.06, 0.22, M.ceramica, false);
+
+  // canasto de ropa
+  cilindro(4.25, 0.05, 9.85, 0.22, 0.5, M.mimbre);
+  redondeada(4.1, 0.5, 9.75, 4.42, 0.6, 9.95, 0.04, M.telaClara).rotation.z = 0.2;
+}
+
+function construirTechos() {
+  caja(-0.1, ALTO_MURO, -0.1, 15.1, NIVEL_TERRAZA, 6.1, M.losa);
+  caja(-0.1, ALTO_MURO, 6.1, 6.1, NIVEL_TERRAZA, 15.1, M.losa);
+  // cielorraso enlucido: tapa la cara de abajo de la losa en los interiores
+  caja(0, ALTO_MURO - 0.02, 0, 15, ALTO_MURO, 6, M.cielorraso, false);
+  caja(0, ALTO_MURO - 0.02, 6, 6, ALTO_MURO, 15, M.cielorraso, false);
+  const n = NIVEL_TERRAZA;
+  parapeto(-0.1, n, 6.1, 0.1, n + 0.35, 15.1);
+  parapeto(5.9, n, 6.1, 6.1, n + 0.35, 15.1);
+  parapeto(0.1, n, 14.9, 5.9, n + 0.35, 15.1);
+}
+
+const lamparas = [];
+function construirTerraza() {
+  const n = NIVEL_TERRAZA;
+  for (let z = 0.1; z + 0.14 <= 5.9; z += 0.15) caja(0.1, n, z, 14.9, n + 0.05, z + 0.14, M.madera);
+  const d = n + 0.05;
+
+  parapeto(-0.1, n, -0.1, 15.1, n + 1.1, 0.1);
+  parapeto(-0.1, n, 0.1, 0.1, n + 1.1, 6.1);
+  parapeto(14.9, n, 0.1, 15.1, n + 1.1, 6.1);
+  parapeto(0.1, n, 5.9, 6, n + 1.1, 6.1);
+  // entre x = 14 y el parapeto derecho queda el paso de la escalera
+  caja(6, d, 5.99, 14, n + 1.0, 6.01, M.vidrio);
+  caja(6, n + 1.0, 5.96, 14, n + 1.06, 6.04, M.metal);
+  for (let x = 6; x <= 14.01; x += 2) caja(x - 0.03, d, 5.96, x + 0.03, n + 1.0, 6.04, M.metal);
+
+  const alto = d + 2.4;
+  for (const x of [3, 8.88]) for (const z of [0.8, 5.08]) caja(x, d, z, x + 0.12, alto, z + 0.12, M.madera);
+  caja(3, alto, 0.8, 9, alto + 0.15, 0.92, M.madera);
+  caja(3, alto, 5.08, 9, alto + 0.15, 5.2, M.madera);
+  for (let x = 3.1; x < 9; x += 0.4) caja(x, alto + 0.15, 0.6, x + 0.06, alto + 0.27, 5.4, M.madera);
+  for (const z of [0.86, 5.14]) {
+    for (let x = 3.3; x < 9; x += 0.45) {
+      esfera(x, alto - 0.08 - 0.05 * Math.sin((x - 3) * 0.52), z, 0.06, 0.06, 0.06, M.luz, false).castShadow = false;
+    }
+  }
+
+  mesa(4.9, 2.5, 7.1, 3.5, d, M.madera);
+  for (const x of [5.0, 5.8, 6.6]) {
+    silla(x + 0.225, d, 2.07, 0);
+    silla(x + 0.225, d, 3.93, 180);
+  }
+  silla(4.52, d, 3, 90);
+  silla(7.48, d, 3, -90);
+
+  caja(11, d, 0.1, 14.8, d + 0.9, 1.0, M.ladrillo);
+  caja(11, d + 0.9, 0.1, 12.6, d + 0.95, 1.05, M.piedra);
+  caja(14, d + 0.9, 0.1, 14.8, d + 0.95, 1.05, M.piedra);
+  caja(12.6, d + 0.9, 0.1, 14, d + 1.9, 0.3, M.ladrillo);
+  caja(12.6, d + 0.9, 0.1, 12.75, d + 1.9, 1.0, M.ladrillo);
+  caja(13.85, d + 0.9, 0.1, 14, d + 1.9, 1.0, M.ladrillo);
+  caja(12.75, d + 0.9, 0.3, 13.85, d + 0.93, 0.95, M.fuego, false);
+  for (let x = 12.8; x < 13.85; x += 0.08) caja(x, d + 1.15, 0.3, x + 0.015, d + 1.17, 0.95, M.metal, false);
+  caja(12.5, d + 1.9, 0.1, 14.1, d + 2.4, 1.1, M.ladrillo);
+  caja(13.1, d + 2.4, 0.2, 13.5, d + 3.6, 0.6, M.ladrillo);
+  caja(13.0, d + 3.6, 0.1, 13.6, d + 3.66, 0.7, M.metal);
+
+  // fogón a gas: sobre la losa no conviene fuego de leña
+  cilindro(11.5, d, 3.5, 0.5, 0.4, M.piedra);
+  cilindro(11.5, d + 0.4, 3.5, 0.4, 0.02, M.goma, false);
+  cilindro(11.5, d + 0.42, 3.5, 0.28, 0.05, M.fuego, false).castShadow = false;
+  caja(10.7, d, 1.9, 12.3, d + 0.42, 2.3, M.madera);
+  caja(10.7, d, 4.7, 12.3, d + 0.42, 5.1, M.madera);
+  caja(9.9, d, 2.7, 10.3, d + 0.42, 4.3, M.madera);
+  caja(12.7, d, 2.7, 13.1, d + 0.42, 4.3, M.madera);
+
+  const r = azar(7);
+  for (const [x, z] of [[0.55, 0.55], [0.55, 5.45], [2.3, 0.55], [9.8, 0.55], [5.5, 5.45]]) {
+    cilindro(x, d, z, 0.28, 0.55, M.maceta);
+    arbusto(x, d + 0.45, z, 0.6, r);
+  }
+}
+
+function construirPatio() {
+  muro(6, 15, 15, 15, ESP_EXT, 2, M.ladrillo);
+  muro(15, 6, 15, 15, ESP_EXT, 2, M.ladrillo);
+  caja(5.9, 2, 14.86, 15.14, 2.05, 15.14, M.piedra);
+  caja(14.86, 2, 5.9, 15.14, 2.05, 14.86, M.piedra);
+
+  // escalera exterior pegada a la medianera derecha: 16 escalones hasta el borde de la terraza
+  const escalones = 16, huella = 4.5 / escalones, contra = NIVEL_TERRAZA / escalones;
+  for (let i = 0; i < escalones; i++) {
+    const z1 = 10.5 - i * huella;
+    caja(14, 0, z1 - huella, 14.9, (i + 1) * contra, z1, M.piedra);
+  }
+  barra([14, 0.9, 10.5], [14, NIVEL_TERRAZA + 0.9, 6.0], 0.05, M.metal);
+  caja(13.97, 0, 10.4, 14.03, 0.9, 10.46, M.metal);
+
+  cilindro(11.5, 0, 12.5, 0.16, 2.8, M.tronco);
+  barra([11.5, 2.0, 12.5], [12.3, 2.9, 12.1], 0.1, M.tronco);
+  barra([11.5, 2.2, 12.5], [10.8, 3.0, 13.1], 0.09, M.tronco);
+  for (const [ox, oy, oz] of [[0, 3.5, 0], [0.8, 3.2, -0.4], [-0.7, 3.3, 0.6], [0.3, 3.0, 0.8], [-0.4, 3.1, -0.7], [0.1, 4.1, 0.1]]) {
+    esfera(11.5 + ox, oy, 12.5 + oz, 1.8, 1.4, 1.8, M.hoja, false);
+  }
+  const r = azar(3);
+  for (let x = 6.8; x < 13.5; x += 1.1) arbusto(x, 0, 14.45, 0.9 + r() * 0.3, r);
+  for (let z = 11.5; z < 14; z += 1.1) arbusto(14.45, 0, z, 0.8, r);
+
+  // la cáscara de banana: no preguntar
+  const g = new THREE.Group();
+  g.position.copy(v3(BANANA.x, 0, BANANA.z));
+  g.rotation.y = -35 * Math.PI / 180;
+  const centro = new THREE.Mesh(geoEsfera, M.banana);
+  centro.position.set(0, 0.018, 0);
+  centro.scale.set(0.05, 0.035, 0.06);
+  g.add(centro);
+  const cabo = new THREE.Mesh(geoCilindro, M.tronco);
+  cabo.position.set(0, 0.048, 0);
+  cabo.scale.set(0.018, 0.035, 0.018);
+  g.add(cabo);
+  [0, 95, 190, 268].forEach((grados, i) => {
+    const a = grados * Math.PI / 180;
+    const tira = new THREE.Mesh(geoEsfera, M.banana);
+    tira.position.set(Math.sin(a) * 0.075, 0.008, Math.cos(a) * 0.075);
+    tira.rotation.set(0, a, 0);
+    tira.rotateX(-0.1);
+    const k = 1 + (i % 2) * 0.12;
+    tira.scale.set(0.04 * k, 0.012 * k, 0.15 * k);
+    g.add(tira);
+  });
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  sueltos.add(g);
+}
+
+const lucesInteriores = [];
+function construirLuces() {
+  const calida = col(1, 0.82, 0.6);
+  const ambientes = [[2.5, 3], [7.5, 4.4], [7.5, 1.4], [3, 13.2], [3.5, 7.7], [2.45, 10.4], [4.9, 10.4], [0.55, 8.6], [12.5, 3]];
+  for (const [x, z] of ambientes) {
+    cilindro(x, ALTO_MURO - 0.05, z, 0.16, 0.05, M.luz, false).castShadow = false;
+    const l = new THREE.PointLight(calida, 1, 6, 2);
+    l.position.copy(v3(x, ALTO_MURO - 0.25, z));
+    l.userData.base = 4;
+    escena.add(l);
+    lucesInteriores.push(l);
+  }
+  const d = NIVEL_TERRAZA + 0.05;
+  for (const [x, y, z, c, base, alcance] of [
+    [4.5, d + 2.2, 3, calida, 3, 6], [7.5, d + 2.2, 3, calida, 3, 6],
+    [11.5, d + 0.8, 3.5, col(1, 0.55, 0.2), 4, 4], [13.3, d + 1.3, 0.7, col(1, 0.5, 0.15), 3, 3],
+  ]) {
+    const l = new THREE.PointLight(c, 1, alcance, 2);
+    l.position.copy(v3(x, y, z));
+    l.userData.base = base;
+    escena.add(l);
+    lucesInteriores.push(l);
+  }
+}
+
+function unirMallas() {
+  for (const [m, geos] of cubetas) {
+    const malla = new THREE.Mesh(mergeGeometries(geos), m);
+    malla.castShadow = !m.userData.sinSombra;
+    malla.receiveShadow = true;
+    escena.add(malla);
+    geos.forEach((g) => g.dispose());
+  }
+}
+
+// ---------- Ambientes para el tablero ----------
+const AMBIENTES = [
+  ['Living', 0, 0, 5, 6], ['Cocina', 5, 0, 10, 2.7], ['Comedor', 5, 2.7, 10, 6], ['Cochera', 10, 0, 15, 6],
+  ['Pasillo', 0, 6, 1.1, 11.4], ['Dormitorio 2', 1.1, 6, 6, 9.4], ['Baño', 1.1, 9.4, 3.8, 11.4],
+  ['Lavadero', 3.8, 9.4, 6, 11.4], ['Dormitorio 1', 0, 11.4, 6, 15], ['Patio', 6, 6, 15, 15],
+];
+function dondeEstoy(x, y, z) {
+  if (estado.volando) return [`Volando`, `${y.toFixed(1)} m de altura`];
+  if (y > 2.5) {
+    if (z < 6.1 && x > -0.1 && x < 15.1) {
+      if (x > 10.5 && z < 1.3) return ['Parrilla', 'Terraza'];
+      if (Math.hypot(x - 11.5, z - 3.5) < 1.8) return ['Fogón', 'Terraza'];
+      if (x > 2.9 && x < 9.1 && z > 0.7 && z < 5.3) return ['Bajo la pérgola', 'Terraza'];
+      return ['Terraza', 'Planta alta'];
+    }
+    if (x > 13.9 && z > 6 && z < 10.6) return ['Escalera', 'Subiendo a la terraza'];
+    return ['Techo', 'Planta alta'];
+  }
+  if (x > 13.9 && z > 6 && z < 10.6 && y > 0.2) return ['Escalera', 'Subiendo a la terraza'];
+  for (const [nombre, x0, z0, x1, z1] of AMBIENTES) if (x >= x0 && x <= x1 && z >= z0 && z <= z1) return [nombre, 'Planta baja'];
+  if (z < 0 && z > -2.5) return ['Vereda', 'Frente de la casa'];
+  if (z <= -2.5) return ['Calle', 'Frente de la casa'];
+  return ['Afuera', 'Fuera del terreno'];
+}
+
+// ---------- Motor ----------
+const lienzo = $('lienzo');
+const renderer = new THREE.WebGLRenderer({ canvas: lienzo, antialias: true, powerPreference: 'high-performance' });
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.75;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+anisotropia = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+
+const camara = new THREE.PerspectiveCamera(70, 1, 0.05, 12000);
+camara.rotation.order = 'YXZ';
+
+const sol = new THREE.DirectionalLight(0xffffff, 3);
+sol.castShadow = true;
+sol.shadow.mapSize.set(4096, 4096);
+sol.shadow.bias = -0.0002;
+sol.shadow.normalBias = 0.03;
+Object.assign(sol.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 120 });
+sol.target.position.copy(v3(7.5, 0, 7.5));
+escena.add(sol, sol.target);
+const hemi = new THREE.HemisphereLight(0x8fa6c8, 0x3b352c, 0);
+escena.add(hemi);
+
+const cielo = new Sky();
+cielo.scale.setScalar(10000);
+escena.add(cielo);
+const cieloAmbiente = new Sky();
+cieloAmbiente.scale.setScalar(10000);
+const escenaCielo = new THREE.Scene();
+escenaCielo.add(cieloAmbiente);
+const pmrem = new THREE.PMREMGenerator(renderer);
+let entornoRT = null;
+
+const compositor = new EffectComposer(renderer);
+compositor.addPass(new RenderPass(escena, camara));
+const gtao = new GTAOPass(escena, camara, 1, 1);
+gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1.5, scale: 1, samples: 16 });
+gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+gtao.blendIntensity = 0.9;
+compositor.addPass(gtao);
+// umbral alto: brillan las lámparas y el fuego, no el cielo
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.25, 0.5, 2.5);
+compositor.addPass(bloom);
+compositor.addPass(new OutputPass());
+
+const HORAS = {
+  dia: { cieloElev: 42, cieloAzim: -40, luzElev: 42, luzAzim: -40, luzColor: col(1, 0.94, 0.85), luzInt: 4,
+    turbidez: 2.5, rayleigh: 2, mie: 0.003, exposicion: 0.6, luces: 0.6, emision: 1.2, hemi: 0.15, niebla: col(0.66, 0.75, 0.86), densidad: 0.004 },
+  atardecer: { cieloElev: 4, cieloAzim: -100, luzElev: 7, luzAzim: -100, luzColor: col(1, 0.6, 0.32), luzInt: 2.6,
+    turbidez: 9, rayleigh: 2.8, mie: 0.007, exposicion: 0.8, luces: 1, emision: 4, hemi: 0.15, niebla: col(0.80, 0.62, 0.52), densidad: 0.008 },
+  noche: { cieloElev: -12, cieloAzim: -100, luzElev: 55, luzAzim: 30, luzColor: col(0.62, 0.72, 1), luzInt: 0.35,
+    turbidez: 2, rayleigh: 0.6, mie: 0.003, exposicion: 0.9, luces: 2.2, emision: 7, hemi: 0.35, niebla: col(0.04, 0.05, 0.08), densidad: 0.01 },
+};
+function direccion(elev, azim) {
+  return new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - elev), THREE.MathUtils.degToRad(azim));
+}
+function ponerHora(clave) {
+  const h = HORAS[clave];
+  for (const c of [cielo, cieloAmbiente]) {
+    const u = c.material.uniforms;
+    u.turbidity.value = h.turbidez; u.rayleigh.value = h.rayleigh;
+    u.mieCoefficient.value = h.mie; u.mieDirectionalG.value = 0.8;
+    u.sunPosition.value.copy(direccion(h.cieloElev, h.cieloAzim));
+  }
+  sol.position.copy(sol.target.position).addScaledVector(direccion(h.luzElev, h.luzAzim), 50);
+  sol.color.copy(h.luzColor);
+  sol.intensity = h.luzInt;
+  hemi.intensity = h.hemi;
+  renderer.toneMappingExposure = h.exposicion;
+  escena.fog = new THREE.FogExp2(h.niebla, h.densidad);
+  for (const l of lucesInteriores) l.intensity = l.userData.base * h.luces;
+  for (const m of Object.values(M)) if (m.userData.emisionBase) m.emissiveIntensity = m === M.fuego ? 4 : h.emision;
+  if (entornoRT) entornoRT.dispose();
+  entornoRT = pmrem.fromScene(escenaCielo);
+  escena.environment = entornoRT.texture;
+  document.querySelectorAll('[data-hora]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.hora === clave)));
+}
+
+let calidad = ES_TACTIL ? 'media' : 'alta';
+function ponerCalidad(clave) {
+  calidad = clave;
+  gtao.enabled = clave === 'alta';
+  const tam = clave === 'alta' ? 4096 : 2048;
+  if (sol.shadow.mapSize.x !== tam) {
+    sol.shadow.mapSize.set(tam, tam);
+    if (sol.shadow.map) { sol.shadow.map.dispose(); sol.shadow.map = null; }
+  }
+  ajustarTamano();
+  document.querySelectorAll('[data-calidad]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.calidad === clave)));
+}
+function ajustarTamano() {
+  const w = lienzo.clientWidth, h = lienzo.clientHeight;
+  const ratio = Math.min(window.devicePixelRatio || 1, calidad === 'alta' ? 1.5 : 1);
+  renderer.setPixelRatio(ratio);
+  renderer.setSize(w, h, false);
+  compositor.setPixelRatio(ratio);
+  compositor.setSize(w, h);
+  camara.aspect = w / Math.max(1, h);
+  camara.updateProjectionMatrix();
+}
+addEventListener('resize', ajustarTamano);
+// en el celular la barra del navegador cambia el alto visible al girar o al hacer scroll
+if (window.visualViewport) visualViewport.addEventListener('resize', ajustarTamano);
+
+// ---------- Recorrido ----------
+// PASO: el escalón más alto que se sube caminando (la escalera tiene contrahuellas de 19 cm)
+const RADIO = 0.3, ALTO_OJOS = 1.65, ALTO_CUERPO = 1.8, PASO = 0.25;
+const estado = {
+  modo: 'portada', pos: v3(INICIO.x, 0.02, INICIO.z), velY: 0, yaw: 0, pitch: 0,
+  volando: false, resbalon: new THREE.Vector3(), cooldownBanana: 0, orbita: 0.9,
+};
+const teclas = new Set();
+
+function piso(x, z, pies) {
+  let alto = -1;
+  for (const c of colisiones) {
+    if (c.max.y > pies + PASO) continue;
+    if (x + 0.15 < c.min.x || x - 0.15 > c.max.x || z + 0.15 < c.min.z || z - 0.15 > c.max.z) continue;
+    if (c.max.y > alto) alto = c.max.y;
+  }
+  return alto;
+}
+function empujar(p) {
+  for (const c of colisiones) {
+    if (c.max.y <= p.y + PASO || c.min.y >= p.y + ALTO_CUERPO) continue;
+    const cx = Math.max(c.min.x, Math.min(p.x, c.max.x)), cz = Math.max(c.min.z, Math.min(p.z, c.max.z));
+    const dx = p.x - cx, dz = p.z - cz, d2 = dx * dx + dz * dz;
+    if (d2 >= RADIO * RADIO) continue;
+    if (d2 > 1e-8) {
+      const d = Math.sqrt(d2), k = (RADIO - d) / d;
+      p.x += dx * k; p.z += dz * k;
+    } else {
+      // el centro quedó adentro de la caja: salir por la cara más cercana
+      const op = [[c.min.x - RADIO - p.x, 0], [c.max.x + RADIO - p.x, 0], [0, c.min.z - RADIO - p.z], [0, c.max.z + RADIO - p.z]];
+      op.sort((a, b) => Math.abs(a[0] + a[1]) - Math.abs(b[0] + b[1]));
+      p.x += op[0][0]; p.z += op[0][1];
+    }
+  }
+}
+function volverAlInicio() {
+  estado.pos.copy(v3(INICIO.x, 0.02, INICIO.z));
+  estado.velY = 0; estado.yaw = 0; estado.pitch = 0; estado.resbalon.set(0, 0, 0);
+  ponerVolar(false);
+}
+function ponerVolar(v) {
+  estado.volando = v;
+  estado.velY = 0;
+  $('b-volar').setAttribute('aria-pressed', String(v));
+  $('vuelo').hidden = !(v && ES_TACTIL);
+}
+let avisoTimer = 0;
+function avisar(texto) {
+  const a = $('aviso');
+  a.textContent = texto;
+  a.hidden = false;
+  clearTimeout(avisoTimer);
+  avisoTimer = setTimeout(() => { a.hidden = true; }, 2600);
+}
+
+const tactil = { mover: null, mirar: null, mx: 0, mz: 0 };
+function mover(dt) {
+  const adelante = new THREE.Vector3(-Math.sin(estado.yaw), 0, -Math.cos(estado.yaw));
+  const derecha = new THREE.Vector3(Math.cos(estado.yaw), 0, -Math.sin(estado.yaw));
+  let fz = (teclas.has('KeyW') || teclas.has('ArrowUp') ? 1 : 0) - (teclas.has('KeyS') || teclas.has('ArrowDown') ? 1 : 0);
+  let fx = (teclas.has('KeyD') || teclas.has('ArrowRight') ? 1 : 0) - (teclas.has('KeyA') || teclas.has('ArrowLeft') ? 1 : 0);
+  fz += tactil.mz; fx += tactil.mx;
+  const vel = (teclas.has('ShiftLeft') || teclas.has('ShiftRight') ? 6 : 3);
+  const deseo = adelante.multiplyScalar(fz).add(derecha.multiplyScalar(fx));
+  if (deseo.lengthSq() > 1) deseo.normalize();
+  const p = estado.pos;
+
+  if (estado.volando) {
+    const mirada = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(estado.pitch, estado.yaw, 0, 'YXZ'));
+    const lado = new THREE.Vector3(Math.cos(estado.yaw), 0, -Math.sin(estado.yaw));
+    p.addScaledVector(mirada, fz * vel * 2 * dt).addScaledVector(lado, fx * vel * 2 * dt);
+    if (teclas.has('Space')) p.y += vel * 2 * dt;
+    if (teclas.has('KeyC')) p.y -= vel * 2 * dt;
+    p.y = Math.max(p.y, 0.02);
+    return;
+  }
+
+  const paso = deseo.multiplyScalar(vel * dt).addScaledVector(estado.resbalon, dt);
+  estado.resbalon.multiplyScalar(Math.max(0, 1 - 2.2 * dt));
+  const sub = Math.max(1, Math.ceil(paso.length() / 0.1));
+  for (let i = 0; i < sub; i++) {
+    p.x += paso.x / sub; p.z += paso.z / sub;
+    empujar(p);
+  }
+  const suelo = piso(p.x, p.z, p.y);
+  if (suelo >= p.y - 0.001) { p.y = suelo; estado.velY = 0; }
+  else {
+    estado.velY -= 9.8 * dt;
+    p.y += estado.velY * dt;
+    if (p.y < suelo) { p.y = suelo; estado.velY = 0; }
+  }
+
+  // la cáscara: pisarla es patinar
+  estado.cooldownBanana -= dt;
+  const b = v3(BANANA.x, 0, BANANA.z);
+  if (estado.cooldownBanana <= 0 && p.y < 0.3 && Math.hypot(p.x - b.x, p.z - b.z) < 0.32) {
+    const dir = new THREE.Vector3(-Math.sin(estado.yaw), 0, -Math.cos(estado.yaw));
+    estado.resbalon.copy(dir.multiplyScalar(7));
+    estado.pitch = 1.3;
+    estado.cooldownBanana = 2;
+    avisar('Te resbalaste con la cáscara de banana');
+  }
+}
+
+function lugarOrbita(t) {
+  const centro = v3(7.5, 1.5, 7);
+  camara.position.set(centro.x + Math.cos(t) * 24, 13, centro.z + Math.sin(t) * 24);
+  camara.lookAt(centro);
+}
+
+// ---------- Plano en miniatura ----------
+const plano = $('plano');
+const ctxPlano = plano.getContext('2d');
+function dibujarPlano() {
+  const css = getComputedStyle(document.documentElement);
+  const c = (n) => css.getPropertyValue(n).trim();
+  const r = window.devicePixelRatio || 1;
+  const w = plano.clientWidth, h = plano.clientHeight;
+  if (plano.width !== Math.round(w * r)) { plano.width = Math.round(w * r); plano.height = Math.round(h * r); }
+  const k = (w - 10) / 17, ox = 5 + k, oy = 5;
+  const X = (x) => ox + x * k, Y = (z) => oy + (15 - z) * k; // la calle abajo, como en el plano
+  ctxPlano.setTransform(r, 0, 0, r, 0, 0);
+  ctxPlano.clearRect(0, 0, w, h);
+  ctxPlano.fillStyle = c('--plano-patio');
+  ctxPlano.fillRect(X(0), Y(15), 15 * k, 15 * k);
+  ctxPlano.fillStyle = c('--plano-casa');
+  ctxPlano.fillRect(X(0), Y(6), 15 * k, 6 * k);
+  ctxPlano.fillRect(X(0), Y(15), 6 * k, 9 * k);
+  ctxPlano.strokeStyle = c('--muted');
+  ctxPlano.lineWidth = 1;
+  for (const [, x0, z0, x1, z1] of AMBIENTES.slice(0, 9)) ctxPlano.strokeRect(X(x0), Y(z1), (x1 - x0) * k, (z1 - z0) * k);
+  ctxPlano.strokeStyle = c('--fg');
+  ctxPlano.strokeRect(X(0), Y(15), 15 * k, 15 * k);
+  ctxPlano.fillStyle = c('--plano-terraza');
+  ctxPlano.fillRect(X(14), Y(10.5), 0.9 * k, 4.5 * k);
+  ctxPlano.fillStyle = '#e8c63a';
+  ctxPlano.fillRect(X(BANANA.x) - 1.5, Y(BANANA.z) - 1.5, 3, 3);
+  // vos: punto con la dirección en la que mirás
+  const px = estado.pos.x, pz = -estado.pos.z;
+  const ang = -estado.yaw;
+  const cx = X(Math.max(-1, Math.min(16, px))), cy = Y(Math.max(-1.2, Math.min(15.5, pz)));
+  ctxPlano.fillStyle = c('--accent');
+  ctxPlano.beginPath();
+  ctxPlano.moveTo(cx + Math.sin(ang) * 7, cy - Math.cos(ang) * 7);
+  ctxPlano.lineTo(cx + Math.sin(ang + 2.5) * 5, cy - Math.cos(ang + 2.5) * 5);
+  ctxPlano.lineTo(cx + Math.sin(ang - 2.5) * 5, cy - Math.cos(ang - 2.5) * 5);
+  ctxPlano.closePath();
+  ctxPlano.fill();
+}
+
+// ---------- Interfaz ----------
+function entrar() {
+  estado.modo = 'jugando';
+  $('portada').hidden = true;
+  $('mira').hidden = false;
+  if (ES_TACTIL) avisar('Dedo izquierdo: caminar · Dedo derecho: mirar');
+  else if (lienzo.requestPointerLock) {
+    try {
+      const p = lienzo.requestPointerLock();
+      if (p && p.catch) p.catch(() => {});
+    } catch (e) { /* sin bloqueo de puntero: se mira arrastrando */ }
+  }
+}
+function pausar() {
+  if (estado.modo !== 'jugando') return;
+  estado.modo = 'pausa';
+  $('portada-titulo').textContent = 'Pausa';
+  $('b-entrar').textContent = 'Seguir recorriendo';
+  $('portada').hidden = false;
+  $('mira').hidden = true;
+  teclas.clear();
+}
+$('b-entrar').addEventListener('click', () => {
+  if (estado.modo === 'portada') volverAlInicio();
+  entrar();
+});
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement !== lienzo) pausar();
+});
+// cada botón suelta el foco al usarse: si no, la barra espaciadora (subir volando) lo volvería a apretar
+const alClic = (b, accion) => b.addEventListener('click', () => { accion(); b.blur(); });
+document.querySelectorAll('[data-hora]').forEach((b) => alClic(b, () => ponerHora(b.dataset.hora)));
+document.querySelectorAll('[data-calidad]').forEach((b) => alClic(b, () => ponerCalidad(b.dataset.calidad)));
+alClic($('b-volar'), () => ponerVolar(!estado.volando));
+alClic($('b-entrada'), () => { volverAlInicio(); if (estado.modo !== 'jugando') entrar(); });
+
+const ATAJOS_HORA = { Digit1: 'dia', Digit2: 'atardecer', Digit3: 'noche', Numpad1: 'dia', Numpad2: 'atardecer', Numpad3: 'noche' };
+addEventListener('keydown', (e) => {
+  // hora y calidad responden siempre, también mientras el mouse está capturado para mirar
+  if (ATAJOS_HORA[e.code]) { ponerHora(ATAJOS_HORA[e.code]); return; }
+  if (e.code === 'KeyQ') { ponerCalidad(calidad === 'alta' ? 'media' : 'alta'); return; }
+  if (estado.modo !== 'jugando') return;
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  teclas.add(e.code);
+  if (e.code === 'KeyF') ponerVolar(!estado.volando);
+  if (e.code === 'KeyR') volverAlInicio();
+});
+addEventListener('keyup', (e) => teclas.delete(e.code));
+addEventListener('blur', () => teclas.clear());
+
+let arrastrando = false;
+lienzo.addEventListener('mousedown', () => {
+  if (estado.modo === 'jugando' && document.pointerLockElement !== lienzo) arrastrando = true;
+});
+addEventListener('mouseup', () => { arrastrando = false; });
+addEventListener('mousemove', (e) => {
+  if (estado.modo !== 'jugando') return;
+  if (document.pointerLockElement !== lienzo && !arrastrando) return;
+  estado.yaw -= e.movementX * 0.0022;
+  estado.pitch = Math.max(-1.5, Math.min(1.5, estado.pitch - e.movementY * 0.0022));
+});
+
+// táctil: el dedo en la mitad izquierda maneja un joystick que aparece donde se apoya; el de la derecha mira
+const RADIO_JOYSTICK = 45;
+lienzo.addEventListener('touchstart', (e) => {
+  if (estado.modo !== 'jugando') return;
+  for (const t of e.changedTouches) {
+    const izq = t.clientX < innerWidth / 2;
+    if (izq && !tactil.mover) {
+      tactil.mover = { id: t.identifier, x: t.clientX, y: t.clientY };
+      const j = $('joystick');
+      j.style.left = `${t.clientX - 55}px`;
+      j.style.top = `${t.clientY - 55}px`;
+      $('perilla').style.transform = 'translate(0, 0)';
+      j.hidden = false;
+    } else if (!izq && !tactil.mirar) {
+      tactil.mirar = { id: t.identifier, x: t.clientX, y: t.clientY };
+    }
+  }
+}, { passive: true });
+lienzo.addEventListener('touchmove', (e) => {
+  for (const t of e.changedTouches) {
+    if (tactil.mover && t.identifier === tactil.mover.id) {
+      const dx = t.clientX - tactil.mover.x, dy = t.clientY - tactil.mover.y;
+      const k = Math.min(1, RADIO_JOYSTICK / Math.max(1, Math.hypot(dx, dy)));
+      $('perilla').style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+      tactil.mx = dx * k / RADIO_JOYSTICK;
+      tactil.mz = -dy * k / RADIO_JOYSTICK;
+    } else if (tactil.mirar && t.identifier === tactil.mirar.id) {
+      estado.yaw -= (t.clientX - tactil.mirar.x) * 0.005;
+      estado.pitch = Math.max(-1.5, Math.min(1.5, estado.pitch - (t.clientY - tactil.mirar.y) * 0.005));
+      tactil.mirar.x = t.clientX; tactil.mirar.y = t.clientY;
+    }
+  }
+}, { passive: true });
+function soltarDedos(e) {
+  for (const t of e.changedTouches) {
+    if (tactil.mover && t.identifier === tactil.mover.id) {
+      tactil.mover = null; tactil.mx = 0; tactil.mz = 0;
+      $('joystick').hidden = true;
+    }
+    if (tactil.mirar && t.identifier === tactil.mirar.id) tactil.mirar = null;
+  }
+}
+lienzo.addEventListener('touchend', soltarDedos);
+lienzo.addEventListener('touchcancel', soltarDedos);
+
+// botones de subir y bajar mientras se vuela con el celular: actúan mientras se mantienen apretados
+for (const [id, codigo] of [['b-subir', 'Space'], ['b-bajar', 'KeyC']]) {
+  const b = $(id);
+  b.addEventListener('pointerdown', (e) => { e.preventDefault(); teclas.add(codigo); });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => teclas.delete(codigo));
+  b.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+// ---------- Arranque ----------
+let ultimo = performance.now(), ultimoHud = 0;
+function cuadro(ahora) {
+  const dt = Math.min(0.05, (ahora - ultimo) / 1000);
+  ultimo = ahora;
+  if (estado.modo === 'portada') {
+    estado.orbita += dt * 0.05;
+    lugarOrbita(estado.orbita);
+  } else {
+    if (estado.modo === 'jugando') mover(dt);
+    camara.position.set(estado.pos.x, estado.pos.y + ALTO_OJOS, estado.pos.z);
+    camara.rotation.set(estado.pitch, estado.yaw, 0, 'YXZ');
+  }
+  compositor.render(dt);
+  if (ahora - ultimoHud > 120) {
+    ultimoHud = ahora;
+    const [nombre, nivel] = estado.modo === 'portada' ? ['Vista general', 'Esperando para entrar'] : dondeEstoy(estado.pos.x, estado.pos.y, -estado.pos.z);
+    $('ambiente').textContent = nombre;
+    $('nivel').textContent = nivel;
+    dibujarPlano();
+  }
+  requestAnimationFrame(cuadro);
+}
+
+async function iniciar() {
+  window.__casaLista = true;
+  const nombres = Object.keys(RECETAS);
+  for (let i = 0; i < nombres.length; i++) {
+    progreso(`Generando texturas: ${nombres[i].toLowerCase()}`, i / (nombres.length + 2));
+    await esperar();
+    generarTextura(nombres[i]);
+  }
+  progreso('Levantando paredes…', nombres.length / (nombres.length + 2));
+  await esperar();
+  crearMateriales();
+  construirTerreno();
+  construirPlantaBaja();
+  construirBano();
+  construirLavadero();
+  construirTechos();
+  construirTerraza();
+  construirPatio();
+  construirLuces();
+  unirMallas();
+  progreso('Encendiendo el sol…', (nombres.length + 1) / (nombres.length + 2));
+  await esperar();
+  ponerHora('dia');
+  ponerCalidad(calidad);
+  lugarOrbita(estado.orbita);
+  $('carga').hidden = true;
+  requestAnimationFrame(cuadro);
+}
+
+// para revisar la escena desde la consola: __casa.mirar([x, y, z], [x, y, z]) en coordenadas de plano
+window.__casa = {
+  mirar(desde, hacia) {
+    estado.modo = 'revision';
+    $('portada').hidden = true;
+    const a = v3(...desde), b = v3(...hacia);
+    estado.pos.set(a.x, a.y - ALTO_OJOS, a.z);
+    const d = b.clone().sub(a);
+    estado.yaw = Math.atan2(-d.x, -d.z);
+    estado.pitch = Math.atan2(d.y, Math.hypot(d.x, d.z));
+    camara.position.set(a.x, a.y, a.z);
+    camara.rotation.set(estado.pitch, estado.yaw, 0, 'YXZ');
+    compositor.render(0.016);
+  },
+  // camina con las teclas dadas durante unos segundos y devuelve dónde quedó, en coordenadas de plano
+  simular(desde, yawGrados, codigos, segundos) {
+    estado.modo = 'revision';
+    ponerVolar(false);
+    estado.pos.copy(v3(desde[0], desde[1], desde[2]));
+    estado.yaw = yawGrados * Math.PI / 180; estado.pitch = 0; estado.velY = 0; estado.resbalon.set(0, 0, 0);
+    codigos.forEach((c) => teclas.add(c));
+    let maxResbalon = 0;
+    for (let i = 0; i < segundos * 60; i++) { mover(1 / 60); maxResbalon = Math.max(maxResbalon, estado.resbalon.length()); }
+    teclas.clear();
+    const p = estado.pos;
+    return { x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +(-p.z).toFixed(2), donde: dondeEstoy(p.x, p.y, -p.z).join(' · '), resbalo: maxResbalon > 1 };
+  },
+  ponerHora, ponerCalidad, estado, tactil,
+};
+
+iniciar().catch((e) => {
+  progreso(`No se pudo armar la escena: ${e.message}`, 1);
+  console.error(e);
+});
+</script>
+</body>
+</html>
